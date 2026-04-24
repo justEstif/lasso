@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 
 const projectRoot = process.cwd();
@@ -45,8 +45,8 @@ describe('lint CLI detector output integration', () => {
     await rm(cwd, { force: true, recursive: true });
     await mkdir(cwd, { recursive: true });
 
-    await writeFile(path.join(cwd, 'conversation.txt'), 'User: stop using antd here');
-    await writeFile(path.join(cwd, 'detector.json'), detectorOutput());
+    await Bun.write(path.join(cwd, 'conversation.txt'), 'User: stop using antd here');
+    await Bun.write(path.join(cwd, 'detector.json'), detectorOutput());
 
     const scan = await runLasso(cwd, [
       'lint',
@@ -78,7 +78,7 @@ describe('lint CLI detector command integration', () => {
     const cwd = path.join(projectRoot, 'tests', '.tmp_lint_cli_runner');
     await rm(cwd, { force: true, recursive: true });
     await mkdir(cwd, { recursive: true });
-    await writeFile(path.join(cwd, 'emit-detector.js'), detectorCommandScript());
+    await Bun.write(path.join(cwd, 'emit-detector.js'), detectorCommandScript());
 
     const scan = await runLasso(cwd, [
       'lint',

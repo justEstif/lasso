@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 
 import { loadConfig, setObserverEnabled } from '../src/config/load';
@@ -19,7 +19,7 @@ describe('Config loading', () => {
     const lassoDir = path.join(tmpDir, '.lasso');
     await mkdir(lassoDir, { recursive: true });
 
-    await writeFile(
+    await Bun.write(
       path.join(lassoDir, 'config.json'),
       JSON.stringify({
         observers: {
