@@ -214,12 +214,16 @@ bun publish --access public
 
 Or publish through GitHub Actions:
 
-1. Add repository secrets:
-   - `NPM_TOKEN` — npm automation token allowed to publish `@justestif/lasso`.
+1. Configure npm trusted publishing for `@justestif/lasso` on npmjs.com:
+   - Publisher: GitHub Actions
+   - Organization/user: `justEstif`
+   - Repository: `lasso`
+   - Workflow filename: `release.yml`
+2. Add repository secret:
    - `TAP_GITHUB_TOKEN` — GitHub token allowed to push to `justEstif/homebrew-tap`.
-2. Bump `package.json` version.
-3. Commit the version bump.
-4. Create and push a matching tag:
+3. Bump `package.json` version.
+4. Commit the version bump.
+5. Create and push a matching tag:
 
 ```bash
 git tag v0.1.0
