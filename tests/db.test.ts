@@ -24,7 +24,7 @@ describe('Database Persistence', () => {
   });
 });
 
-describe('Database migrations logic', () => {
+describe('Database migration schema', () => {
   test('runMigrations applies schema properly and creates tables', () => {
     const db = new Database(':memory:');
     runMigrations(db);
@@ -33,34 +33,40 @@ describe('Database migrations logic', () => {
     const tables = tablesQuery.all() as { name: string }[];
     const tableNames = tables.map((t) => t.name);
 
-    expect(tableNames).toContain('_migrations');
+    expect(tableNames).toContain('__drizzle_migrations');
     expect(tableNames).toContain('lint_scan_runs');
     expect(tableNames).toContain('memory_snapshots');
   });
+});
 
-  test('runMigrations records migrations correctly', () => {
+describe('Database migration journal', () => {
+  test('runMigrations records Drizzle migrations correctly', () => {
     const db = new Database(':memory:');
     runMigrations(db);
 
-    // Check if migrations were recorded
-    const migrations = db.prepare('SELECT * FROM _migrations').all() as Record<string, unknown>[];
-    expect(migrations.length).toBe(3);
-    expect(migrations.some((m) => m.observer === 'lint' && m.version === 2)).toBe(true);
-    expect(migrations.some((m) => m.observer === 'memory' && m.version === 1)).toBe(true);
+    const migrations = db.prepare('SELECT * FROM __drizzle_migrations').all() as Record<
+      string,
+      unknown
+    >[];
+    expect(migrations.length).toBe(1);
+    expect(migrations[0]?.hash).toBeString();
   });
 
   test('runMigrations is idempotent', () => {
     const db = new Database(':memory:');
 
-    // First run
     runMigrations(db);
-    let migrations = db.prepare('SELECT * FROM _migrations').all() as Record<string, unknown>[];
-    expect(migrations.length).toBe(3);
+    let migrations = db.prepare('SELECT * FROM __drizzle_migrations').all() as Record<
+      string,
+      unknown
+    >[];
+    expect(migrations.length).toBe(1);
 
-    // Second run
     runMigrations(db);
-    migrations = db.prepare('SELECT * FROM _migrations').all() as Record<string, unknown>[];
-    // Count should still be 3, not duplicated
-    expect(migrations.length).toBe(3);
+    migrations = db.prepare('SELECT * FROM __drizzle_migrations').all() as Record<
+      string,
+      unknown
+    >[];
+    expect(migrations.length).toBe(1);
   });
 });

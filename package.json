@@ -9,6 +9,9 @@
   "scripts": {
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
     "lint": "eslint src/**/*.ts tests/**/*.ts",
     "test": "bun test"
   },
