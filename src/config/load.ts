@@ -28,7 +28,7 @@ export interface LassoConfig {
   };
 }
 
-const defaultConfig: LassoConfig = {
+export const defaultConfig: LassoConfig = {
   observers: {
     lint: {
       debug: false,

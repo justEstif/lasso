@@ -19,6 +19,7 @@ import {
   handleMemoryReflect,
   handleMemoryStatus,
 } from '../observers/memory/commands.ts';
+import { handleTui } from '../tui/dashboard.tsx';
 
 export async function bootstrap() {
   const program = new Command();
@@ -33,20 +34,30 @@ export async function bootstrap() {
 
   const config = await loadConfig();
 
-  registerGlobalCommands(program, config);
+  registerGlobalCommands(program, db, config);
   registerLintCommands(program, db, config);
   registerMemoryCommands(program, db, config);
 
   program.parse();
 }
 
-function registerGlobalCommands(program: Command, config: Awaited<ReturnType<typeof loadConfig>>) {
+function registerGlobalCommands(
+  program: Command,
+  db: Database,
+  config: Awaited<ReturnType<typeof loadConfig>>,
+) {
   program
     .command('config')
     .description('Show current project configuration')
     .action(() => {
       console.log(JSON.stringify(config, null, 2));
     });
+
+  program
+    .command('tui')
+    .description('Open the lasso terminal dashboard')
+    .option('--once', 'Render one dashboard frame and exit')
+    .action((opts) => handleTui(db, config, opts));
 
   program
     .command('enable <observer>')
