@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "commander": "^14.0.3",
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.2",
+    "valibot": "^1.3.1"
   }
 }

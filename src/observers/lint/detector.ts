@@ -1,20 +1,25 @@
 import type { Database } from 'bun:sqlite';
 
+import * as v from 'valibot';
+
 import { addRecurrence, createEntry, getEntry } from './db.ts';
 import { LINT_DETECTOR_VERSION } from './prompt.ts';
 
-export interface DetectorEntry {
-  description: string;
-  matches_existing_id: null | string;
-  proposed_form?: null | string;
-  source_excerpt?: null | string;
-}
+const DetectorEntrySchema = v.object({
+  description: v.pipe(v.string(), v.trim(), v.nonEmpty()),
+  matches_existing_id: v.nullable(v.pipe(v.string(), v.trim())),
+  proposed_form: v.optional(v.nullable(v.string())),
+  source_excerpt: v.optional(v.nullable(v.string())),
+});
 
-export interface DetectorResult {
-  entries: DetectorEntry[];
-  found_opportunity: boolean;
-  reasoning: string;
-}
+const DetectorResultSchema = v.object({
+  entries: v.array(DetectorEntrySchema),
+  found_opportunity: v.boolean(),
+  reasoning: v.pipe(v.string(), v.trim(), v.nonEmpty()),
+});
+
+export type DetectorEntry = v.InferOutput<typeof DetectorEntrySchema>;
+export type DetectorResult = v.InferOutput<typeof DetectorResultSchema>;
 
 export interface ScanSummary {
   created: number;
@@ -48,9 +53,8 @@ export function applyDetectorResult(db: Database, result: DetectorResult): ScanS
 }
 
 export function parseDetectorResult(input: string): DetectorResult {
-  const parsed = JSON.parse(extractJsonObject(input)) as DetectorResult;
-  validateDetectorResult(parsed);
-  return parsed;
+  const parsed = JSON.parse(extractJsonObject(input)) as unknown;
+  return v.parse(DetectorResultSchema, parsed);
 }
 
 export function extractJsonObject(input: string): string {
@@ -74,33 +78,4 @@ function addMatchedRecurrence(db: Database, entry: DetectorEntry) {
   }
 
   addRecurrence(db, existing.id, entry.source_excerpt ?? entry.description);
-}
-
-function validateDetectorResult(result: DetectorResult) {
-  if (typeof result.found_opportunity !== 'boolean') {
-    throw new TypeError('Detector result must include found_opportunity boolean');
-  }
-
-  if (typeof result.reasoning !== 'string') {
-    throw new TypeError('Detector result must include reasoning string');
-  }
-
-  if (!Array.isArray(result.entries)) {
-    throw new TypeError('Detector result must include entries array');
-  }
-
-  for (const entry of result.entries) {
-    validateDetectorEntry(entry);
-  }
-}
-
-function validateDetectorEntry(entry: DetectorEntry) {
-  if (typeof entry.description !== 'string' || entry.description.trim().length === 0) {
-    throw new TypeError('Detector entry must include non-empty description');
-  }
-
-  const matchId = entry.matches_existing_id;
-  if (matchId !== null && typeof matchId !== 'string') {
-    throw new TypeError('Detector entry matches_existing_id must be string or null');
-  }
 }

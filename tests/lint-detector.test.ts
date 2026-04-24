@@ -52,6 +52,22 @@ describe('lint detector output parsing', () => {
 
     expect(result.found_opportunity).toBe(false);
   });
+
+  test('rejects invalid detector output with schema errors', () => {
+    expect(() => parseDetectorResult('{"reasoning":"missing fields","entries":[]}')).toThrow();
+    expect(() =>
+      parseDetectorResult('{"found_opportunity":true,"reasoning":"ok","entries":{}}'),
+    ).toThrow();
+    expect(() =>
+      parseDetectorResult(
+        JSON.stringify({
+          entries: [{ description: '', matches_existing_id: null }],
+          found_opportunity: true,
+          reasoning: 'empty description',
+        }),
+      ),
+    ).toThrow();
+  });
 });
 
 describe('lint detector recurrence handling', () => {
