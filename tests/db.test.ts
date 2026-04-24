@@ -22,6 +22,24 @@ describe('Database Persistence', () => {
     closeDb();
     await rm(tmpDir, { force: true, recursive: true });
   });
+
+  test('getDb uses ancestor project database from subdirectories', async () => {
+    await rm(tmpDir, { force: true, recursive: true });
+    const projectRoot = path.join(tmpDir, 'project');
+    const nested = path.join(projectRoot, 'src', 'nested');
+    await mkdir(path.join(projectRoot, '.lasso'), { recursive: true });
+    await mkdir(nested, { recursive: true });
+    await Bun.write(path.join(projectRoot, '.lasso', 'config.json'), '{}');
+
+    const db = getDb(nested);
+    expect(db).toBeInstanceOf(Database);
+    closeDb();
+
+    expect(await Bun.file(path.join(projectRoot, '.lasso', 'db.sqlite')).exists()).toBe(true);
+    expect(await Bun.file(path.join(nested, '.lasso', 'db.sqlite')).exists()).toBe(false);
+
+    await rm(tmpDir, { force: true, recursive: true });
+  });
 });
 
 describe('Database migration schema', () => {

@@ -2,6 +2,8 @@ import { Database } from 'bun:sqlite';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 
+import { resolveLassoPaths } from '../project/paths.ts';
+
 let dbInstance: Database | null = null;
 
 export function closeDb(): void {
@@ -14,7 +16,7 @@ export function closeDb(): void {
 export function getDb(cwd: string = process.cwd()): Database {
   if (dbInstance) return dbInstance;
 
-  const lassoDir = path.join(cwd, '.lasso');
+  const { lassoDir } = resolveLassoPaths(cwd);
   const dbPath = path.join(lassoDir, 'db.sqlite');
   mkdirSync(lassoDir, { recursive: true });
 

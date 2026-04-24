@@ -20,6 +20,7 @@ import {
   handleMemoryStatus,
 } from '../observers/memory/commands.ts';
 import { describeObserver, initProject } from '../onboarding/init.ts';
+import { resolveLassoPaths } from '../project/paths.ts';
 import { handleTui } from '../tui/dashboard.tsx';
 
 export async function bootstrap() {
@@ -65,7 +66,8 @@ async function handleSetup(opts: {
   harness?: 'pi';
   observers?: string;
 }) {
-  const result = await initProject(process.cwd(), opts);
+  const { projectRoot } = resolveLassoPaths();
+  const result = await initProject(projectRoot, opts);
   console.log('Set up lasso project.');
   console.log(`Harness: ${opts.harness ?? 'pi'} (Pi coding agent integration)`);
   console.log(`Observers: ${describeConfiguredObservers(opts.observers)}`);

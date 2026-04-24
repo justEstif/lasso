@@ -9,7 +9,9 @@ describe('package distribution metadata', () => {
     expect(packageJson.name).toBe('@justestif/lasso');
     expect(packageMetadata.private).toBeUndefined();
     expect(packageJson.bin.lasso).toBe('./index.ts');
+    expect(packageJson.man).toContain('./man/lasso.1');
     expect(packageJson.files).toContain('drizzle');
+    expect(packageJson.files).toContain('man');
     expect(packageJson.files).toContain('src');
   });
 });

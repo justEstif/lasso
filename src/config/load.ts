@@ -2,6 +2,8 @@ import { mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
+import { resolveLassoPaths } from '../project/paths.ts';
+
 export interface LassoConfig {
   harness: {
     type: 'pi';
@@ -66,7 +68,8 @@ type ObserverName = keyof LassoConfig['observers'];
 
 export async function loadConfig(cwd: string = process.cwd()): Promise<LassoConfig> {
   const globalPath = path.join(homedir(), '.config', 'lasso', 'config.json');
-  const projectPath = path.join(cwd, '.lasso', 'config.json');
+  const { lassoDir } = resolveLassoPaths(cwd);
+  const projectPath = path.join(lassoDir, 'config.json');
 
   const globalConfig = asRecord(await readJsonFile(globalPath));
   const projectConfig = asRecord(await readJsonFile(projectPath));
@@ -104,7 +107,8 @@ export async function setObserverEnabled(
 ) {
   assertObserverName(observer);
 
-  const projectPath = path.join(cwd, '.lasso', 'config.json');
+  const { lassoDir } = resolveLassoPaths(cwd);
+  const projectPath = path.join(lassoDir, 'config.json');
   const projectConfig = (await readJsonFile(projectPath)) || {};
   const currentObservers = asRecord(projectConfig.observers);
   const currentObserverConfig = asRecord(currentObservers[observer]);

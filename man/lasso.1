@@ -1,0 +1,170 @@
+.TH LASSO 1 "April 2026" "lasso 0.1.0" "User Commands"
+.SH NAME
+lasso \- harness-agnostic observational memory for coding agents
+.SH SYNOPSIS
+.B lasso
+.RI [ command ]
+.br
+.B lasso setup
+.RI [ options ]
+.br
+.B lasso status
+.br
+.B lasso tui
+.RB [ --once ]
+.br
+.B lasso memory
+.RI command
+.br
+.B lasso lint
+.RI command
+.SH DESCRIPTION
+.B lasso
+stores project-local observational memory for coding agents and helps turn repeated user corrections into durable lint rules.
+.PP
+State is kept in the current project under
+.BR .lasso/ .
+The CLI is safe to install globally because config and database files are resolved per project.
+.SH INSTALLATION
+Install with Bun:
+.PP
+.nf
+.RS
+bun install -g @justestif/lasso
+.RE
+.fi
+.PP
+Install with npm:
+.PP
+.nf
+.RS
+npm install -g @justestif/lasso
+.RE
+.fi
+.PP
+Install with Homebrew:
+.PP
+.nf
+.RS
+brew tap justEstif/tap
+brew install lasso
+.RE
+.fi
+.SH PROJECT SETUP
+Run setup from the project root:
+.PP
+.nf
+.RS
+lasso setup
+.RE
+.fi
+.PP
+This creates:
+.PP
+.nf
+.RS
+.lasso/config.json
+.pi/extensions/lasso.ts
+.RE
+.fi
+.PP
+For Pi, reload extensions after setup:
+.PP
+.nf
+.RS
+/reload
+.RE
+.fi
+.SH PATH RESOLUTION
+.B lasso
+chooses project-local state in this order:
+.IP 1. 4
+If
+.B LASSO_PATH
+is set, use it. It may point to either a project root or directly to a
+.B .lasso
+directory.
+.IP 2. 4
+Otherwise, walk upward from the current directory until a
+.B .lasso/config.json
+file is found.
+.IP 3. 4
+If no project is found, fall back to the current directory.
+.PP
+Examples:
+.PP
+.nf
+.RS
+LASSO_PATH=/path/to/project lasso status
+LASSO_PATH=/path/to/project/.lasso lasso status
+.RE
+.fi
+.SH COMMANDS
+.TP
+.B lasso setup
+Set up lasso for the current project and install the Pi adapter by default.
+.TP
+.B lasso status
+Show combined lint and memory observer status.
+.TP
+.B lasso tui
+Open the terminal dashboard.
+.TP
+.B lasso tui --once
+Render one dashboard frame and exit.
+.TP
+.B lasso enable lint|memory
+Enable an observer for the resolved project.
+.TP
+.B lasso disable lint|memory
+Disable an observer for the resolved project.
+.SH MEMORY COMMANDS
+.TP
+.B lasso memory observe --content TEXT
+Record a memory observation.
+.TP
+.B lasso memory reflect --content TEXT
+Record a consolidated memory reflection.
+.TP
+.B lasso memory status
+Show memory state.
+.TP
+.B lasso memory export
+Export memory snapshots and reflections as markdown.
+.SH LINT COMMANDS
+.TP
+.B lasso lint scan --input FILE --detector-command COMMAND
+Run the lint detector against a transcript.
+.TP
+.B lasso lint list
+List lint entries.
+.TP
+.B lasso lint show ID
+Show one lint entry.
+.TP
+.B lasso lint accept|reject|defer|implement ID
+Transition a lint entry.
+.TP
+.B lasso lint export
+Export lint entries.
+.SH ENVIRONMENT
+.TP
+.B LASSO_PATH
+Override project path resolution. Set it to a project root or a
+.B .lasso
+directory.
+.SH FILES
+.TP
+.B .lasso/config.json
+Project configuration.
+.TP
+.B .lasso/db.sqlite
+Project SQLite database.
+.TP
+.B .pi/extensions/lasso.ts
+Pi extension installed by
+.BR "lasso setup" .
+.SH SEE ALSO
+.BR bun (1),
+.BR npm (1),
+.BR brew (1)

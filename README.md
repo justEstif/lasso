@@ -139,6 +139,13 @@ Lasso stores project-local state in:
 
 The database is SQLite and uses Drizzle migrations from `drizzle/`.
 
+When you run `lasso` from a subdirectory, it walks upward to find the nearest `.lasso/config.json` and uses that project database. To override the project location, set `LASSO_PATH` to either the project root or the `.lasso` directory:
+
+```bash
+LASSO_PATH=/path/to/project lasso status
+LASSO_PATH=/path/to/project/.lasso lasso status
+```
+
 ## Development
 
 ```bash

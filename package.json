@@ -6,6 +6,9 @@
   "bin": {
     "lasso": "./index.ts"
   },
+  "man": [
+    "./man/lasso.1"
+  ],
   "type": "module",
   "license": "MIT",
   "homepage": "https://github.com/justEstif/lasso#readme",
@@ -31,6 +34,7 @@
     "drizzle",
     "index.ts",
     "logger.ts",
+    "man",
     "src"
   ],
   "scripts": {
