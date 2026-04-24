@@ -206,10 +206,35 @@ bunx lasso setup --harness pi --observers memory
 bunx lasso status
 ```
 
-Publish:
+Publish manually:
 
 ```bash
 bun publish --access public
+```
+
+Or publish through GitHub Actions:
+
+1. Add repository secrets:
+   - `NPM_TOKEN` — npm automation token allowed to publish `@justestif/lasso`.
+   - `TAP_GITHUB_TOKEN` — GitHub token allowed to push to `justEstif/homebrew-tap`.
+2. Bump `package.json` version.
+3. Commit the version bump.
+4. Create and push a matching tag:
+
+```bash
+git tag v0.1.0
+git push origin main --tags
+```
+
+The release workflow publishes to npm and updates the Homebrew tap formula.
+
+## Homebrew
+
+After the tap formula is available:
+
+```bash
+brew tap justEstif/tap
+brew install lasso
 ```
 
 ## Development

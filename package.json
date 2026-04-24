@@ -8,6 +8,14 @@
   },
   "type": "module",
   "license": "MIT",
+  "homepage": "https://github.com/justEstif/lasso#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/justEstif/lasso.git"
+  },
+  "bugs": {
+    "url": "https://github.com/justEstif/lasso/issues"
+  },
   "keywords": [
     "agent",
     "bun",

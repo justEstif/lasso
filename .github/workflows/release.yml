@@ -1,0 +1,104 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+
+jobs:
+  publish-npm:
+    name: Publish npm package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Verify version matches tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE_VERSION="$(bun pm pkg get version | tr -d '"')"
+          test "$VERSION" = "$PACKAGE_VERSION"
+
+      - name: Validate
+        run: |
+          bun run format:check
+          bun run lint
+          bun test
+          bun pm pack --dry-run
+
+      - name: Publish to npm
+        run: bun publish --access public
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  update-homebrew-tap:
+    name: Update Homebrew tap
+    runs-on: ubuntu-latest
+    needs: publish-npm
+    steps:
+      - name: Checkout lasso
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Compute npm tarball checksum
+        id: npm
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          bun pm pack --filename /tmp/lasso.tgz --quiet
+          SHA256="$(sha256sum /tmp/lasso.tgz | awk '{print $1}')"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: justEstif/homebrew-tap
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update formula
+        run: |
+          mkdir -p homebrew-tap/Formula
+          cat > homebrew-tap/Formula/lasso.rb <<RUBY
+          class Lasso < Formula
+            desc "Harness-agnostic observational memory and linting CLI for coding agents"
+            homepage "https://github.com/justEstif/lasso"
+            url "https://registry.npmjs.org/@justestif/lasso/-/lasso-${{ steps.npm.outputs.version }}.tgz"
+            sha256 "${{ steps.npm.outputs.sha256 }}"
+            license "MIT"
+
+            depends_on "oven-sh/bun/bun"
+
+            def install
+              libexec.install Dir["*"]
+              cd libexec do
+                system "bun", "install", "--production"
+              end
+              bin.install_symlink libexec/"index.ts" => "lasso"
+            end
+
+            test do
+              assert_match "Usage: lasso", shell_output("#{bin}/lasso --help")
+            end
+          end
+          RUBY
+
+      - name: Commit and push tap update
+        working-directory: homebrew-tap
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/lasso.rb
+          git commit -m "Update lasso to ${{ github.ref_name }}"
+          git push
