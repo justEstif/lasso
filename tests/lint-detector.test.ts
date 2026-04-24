@@ -3,7 +3,11 @@ import { describe, expect, test } from 'bun:test';
 
 import { runMigrations } from '../src/db/migrations.ts';
 import { getRecurrences, listEntries } from '../src/observers/lint/db.ts';
-import { applyDetectorResult, parseDetectorResult } from '../src/observers/lint/detector.ts';
+import {
+  applyDetectorResult,
+  extractJsonObject,
+  parseDetectorResult,
+} from '../src/observers/lint/detector.ts';
 
 function createMigratedDatabase() {
   const db = new Database(':memory:');
@@ -36,6 +40,17 @@ describe('lint detector entry creation', () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]?.status).toBe('proposed');
     expect(entries[0]?.detector_version).toBe('lint-rubric-v1');
+  });
+});
+
+describe('lint detector output parsing', () => {
+  test('extracts JSON from fenced detector output', () => {
+    const json = extractJsonObject(
+      'Here is the result:\n```json\n{"found_opportunity":false,"reasoning":"none","entries":[]}\n```',
+    );
+    const result = parseDetectorResult(json);
+
+    expect(result.found_opportunity).toBe(false);
   });
 });
 

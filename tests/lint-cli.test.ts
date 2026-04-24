@@ -1,0 +1,65 @@
+import { describe, expect, test } from 'bun:test';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+
+const projectRoot = process.cwd();
+const entrypoint = path.join(projectRoot, 'index.ts');
+
+async function runLasso(cwd: string, args: string[]) {
+  const process = Bun.spawn(['bun', 'run', entrypoint, ...args], {
+    cwd,
+    stderr: 'pipe',
+    stdout: 'pipe',
+  });
+
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(process.stdout).text(),
+    new Response(process.stderr).text(),
+    process.exited,
+  ]);
+
+  return { exitCode, stderr, stdout };
+}
+
+describe('lint CLI integration', () => {
+  test('scan persists detector output and list displays it', async () => {
+    const cwd = path.join(projectRoot, 'tests', '.tmp_lint_cli');
+    await rm(cwd, { force: true, recursive: true });
+    await mkdir(cwd, { recursive: true });
+
+    await writeFile(path.join(cwd, 'conversation.txt'), 'User: stop using antd here');
+    await writeFile(path.join(cwd, 'detector.json'), detectorOutput());
+
+    const scan = await runLasso(cwd, [
+      'lint',
+      'scan',
+      '--input',
+      'conversation.txt',
+      '--detector-output',
+      'detector.json',
+    ]);
+    const list = await runLasso(cwd, ['lint', 'list']);
+
+    expect(scan.exitCode).toBe(0);
+    expect(scan.stdout).toContain('1 created');
+    expect(list.stdout).toContain('PROPOSED');
+    expect(list.stdout).toContain('Avoid antd imports in migrated pages');
+
+    await rm(cwd, { force: true, recursive: true });
+  });
+});
+
+function detectorOutput() {
+  return JSON.stringify({
+    entries: [
+      {
+        description: 'Avoid antd imports in migrated pages',
+        matches_existing_id: null,
+        proposed_form: 'no-restricted-imports antd',
+        source_excerpt: 'User: stop using antd here',
+      },
+    ],
+    found_opportunity: true,
+    reasoning: 'User stated a convention.',
+  });
+}

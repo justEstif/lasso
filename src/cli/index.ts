@@ -63,7 +63,10 @@ function registerLintCommands(program: Command, db: Database) {
   lintCmd
     .command('scan')
     .description('Force a detector run for the lint observer')
-    .action(() => handleLintScan(db));
+    .option('--input <path>', 'Conversation transcript file')
+    .option('--detector-output <path>', 'Detector JSON output file')
+    .option('--print-prompt', 'Print the detector prompt instead of applying results')
+    .action((opts) => handleLintScan(db, opts));
   lintCmd
     .command('list')
     .description('List lint entries')

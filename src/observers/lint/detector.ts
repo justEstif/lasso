@@ -1,8 +1,7 @@
 import type { Database } from 'bun:sqlite';
 
 import { addRecurrence, createEntry, getEntry } from './db.ts';
-
-const DETECTOR_VERSION = 'lint-rubric-v1';
+import { LINT_DETECTOR_VERSION } from './prompt.ts';
 
 export interface DetectorEntry {
   description: string;
@@ -37,7 +36,7 @@ export function applyDetectorResult(db: Database, result: DetectorResult): ScanS
 
     createEntry(db, {
       description: entry.description,
-      detector_version: DETECTOR_VERSION,
+      detector_version: LINT_DETECTOR_VERSION,
       proposed_form: entry.proposed_form ?? null,
       source_excerpt: entry.source_excerpt ?? null,
       status: 'proposed',
@@ -49,9 +48,23 @@ export function applyDetectorResult(db: Database, result: DetectorResult): ScanS
 }
 
 export function parseDetectorResult(input: string): DetectorResult {
-  const parsed = JSON.parse(input) as DetectorResult;
+  const parsed = JSON.parse(extractJsonObject(input)) as DetectorResult;
   validateDetectorResult(parsed);
   return parsed;
+}
+
+export function extractJsonObject(input: string): string {
+  const trimmed = input.trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) return trimmed;
+
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced?.[1]) return fenced[1].trim();
+
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start >= 0 && end > start) return trimmed.slice(start, end + 1);
+
+  throw new SyntaxError('Detector output did not contain a JSON object');
 }
 
 function addMatchedRecurrence(db: Database, entry: DetectorEntry) {
@@ -68,7 +81,26 @@ function validateDetectorResult(result: DetectorResult) {
     throw new TypeError('Detector result must include found_opportunity boolean');
   }
 
+  if (typeof result.reasoning !== 'string') {
+    throw new TypeError('Detector result must include reasoning string');
+  }
+
   if (!Array.isArray(result.entries)) {
     throw new TypeError('Detector result must include entries array');
+  }
+
+  for (const entry of result.entries) {
+    validateDetectorEntry(entry);
+  }
+}
+
+function validateDetectorEntry(entry: DetectorEntry) {
+  if (typeof entry.description !== 'string' || entry.description.trim().length === 0) {
+    throw new TypeError('Detector entry must include non-empty description');
+  }
+
+  const matchId = entry.matches_existing_id;
+  if (matchId !== null && typeof matchId !== 'string') {
+    throw new TypeError('Detector entry matches_existing_id must be string or null');
   }
 }

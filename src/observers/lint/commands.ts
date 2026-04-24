@@ -1,19 +1,52 @@
 import { Database } from 'bun:sqlite';
-import { listEntries, getEntry, updateEntryStatus, getRecurrences, LintStatus } from './db';
-import { applyDetectorResult, parseDetectorResult } from './detector.ts';
 
-export async function handleLintScan(db: Database) {
-  const input = await Bun.stdin.text();
-  if (input.trim().length === 0) {
-    console.error('lint scan expects detector JSON on stdin for the MVP scaffold.');
-    process.exit(1);
+import {
+  getEntry,
+  getRecurrences,
+  listActiveEntries,
+  listEntries,
+  LintStatus,
+  updateEntryStatus,
+} from './db';
+import { applyDetectorResult, parseDetectorResult } from './detector.ts';
+import { buildLintDetectorPrompt } from './prompt.ts';
+
+interface LintScanOptions {
+  detectorOutput?: string;
+  input?: string;
+  printPrompt?: boolean;
+}
+
+export async function handleLintScan(db: Database, options: LintScanOptions) {
+  const conversation = await readConversation(options);
+  const prompt = buildLintDetectorPrompt(conversation, listActiveEntries(db, 50));
+
+  if (options.printPrompt) {
+    console.log(prompt);
+    return;
   }
 
-  const result = parseDetectorResult(input);
+  const detectorOutput = await readDetectorOutput(options.detectorOutput);
+  const result = parseDetectorResult(detectorOutput);
   const summary = applyDetectorResult(db, result);
   console.log(
     `Lint scan complete: ${summary.created} created, ${summary.recurrences} recurrences, ${summary.skipped} skipped.`,
   );
+}
+
+async function readConversation(options: LintScanOptions) {
+  if (options.input) return Bun.file(options.input).text();
+  if (options.printPrompt) return Bun.stdin.text();
+  return '';
+}
+
+async function readDetectorOutput(outputPath?: string) {
+  if (outputPath) return Bun.file(outputPath).text();
+  const input = await Bun.stdin.text();
+  if (input.trim().length === 0) {
+    throw new Error('lint scan needs --detector-output <file> unless --print-prompt is used.');
+  }
+  return input;
 }
 
 export function handleLintList(db: Database, opts: { status?: LintStatus }) {

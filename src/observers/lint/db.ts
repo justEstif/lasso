@@ -23,7 +23,7 @@ export interface LintRecurrence {
 
 export function listEntries(db: Database, status?: LintStatus): LintEntry[] {
   let query = 'SELECT * FROM lint_entries';
-  const params: any[] = [];
+  const params: string[] = [];
 
   if (status) {
     query += ' WHERE status = ?';
@@ -37,6 +37,17 @@ export function listEntries(db: Database, status?: LintStatus): LintEntry[] {
 
 export function getEntry(db: Database, id: string): LintEntry | null {
   return db.prepare('SELECT * FROM lint_entries WHERE id = ?').get(id) as LintEntry | null;
+}
+
+export function listActiveEntries(db: Database, limit: number): LintEntry[] {
+  return db
+    .prepare(
+      `SELECT * FROM lint_entries
+       WHERE status IN ('proposed', 'accepted', 'deferred')
+       ORDER BY updated_at DESC
+       LIMIT ?`,
+    )
+    .all(limit) as LintEntry[];
 }
 
 export function createEntry(
