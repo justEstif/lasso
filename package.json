@@ -1,11 +1,30 @@
 {
-  "name": "lasso",
+  "name": "@justestif/lasso",
+  "version": "0.1.0",
+  "description": "Harness-agnostic observational memory and linting CLI for coding agents.",
   "module": "index.ts",
   "bin": {
     "lasso": "./index.ts"
   },
   "type": "module",
-  "private": true,
+  "license": "MIT",
+  "keywords": [
+    "agent",
+    "bun",
+    "cli",
+    "lint",
+    "memory",
+    "observability",
+    "pi"
+  ],
+  "files": [
+    "AGENTS.md",
+    "README.md",
+    "drizzle",
+    "index.ts",
+    "logger.ts",
+    "src"
+  ],
   "scripts": {
     "format": "prettier --write .",
     "format:check": "prettier --check .",

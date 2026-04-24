@@ -1,3 +1,5 @@
+#!/usr/bin/env bun
+
 import { bootstrap } from './src/cli';
 
 bootstrap().catch((err) => {
