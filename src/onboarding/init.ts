@@ -8,7 +8,6 @@ export interface InitOptions {
   force?: boolean;
   harness?: 'pi';
   observers?: string;
-  pi?: boolean;
 }
 
 export interface InitResult {
@@ -115,7 +114,7 @@ function piExtensionTemplate() {
 }
 
 function shouldInstallPiAdapter(options: InitOptions) {
-  return options.pi ?? (options.harness ?? 'pi') === 'pi';
+  return (options.harness ?? 'pi') === 'pi';
 }
 
 async function writeConfig(cwd: string, options: InitOptions, result: InitResult) {

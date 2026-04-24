@@ -10,8 +10,8 @@ describe('project setup', () => {
     await rm(cwd, { force: true, recursive: true });
     await mkdir(cwd, { recursive: true });
 
-    const first = await initProject(cwd, { detectorCommand: 'detector', pi: true });
-    const second = await initProject(cwd, { detectorCommand: 'changed', pi: true });
+    const first = await initProject(cwd, { detectorCommand: 'detector', harness: 'pi' });
+    const second = await initProject(cwd, { detectorCommand: 'changed', harness: 'pi' });
     const config = await Bun.file(path.join(cwd, '.lasso', 'config.json')).json();
 
     expect(first.created).toHaveLength(2);

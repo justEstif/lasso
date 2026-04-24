@@ -28,6 +28,7 @@ Use `.agents/skills/drizzle-persistence-cleanup/SKILL.md` when the user asks why
 
 When implementing features, always:
 
+- Remove deprecated aliases or compatibility paths unless the user explicitly asks to keep them
 - Write unit tests for individual components
 - Write integration tests for end-to-end functionality
 - Run the linter to ensure code quality

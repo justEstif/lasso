@@ -27,7 +27,13 @@ describe('setup CLI integration', () => {
     await rm(cwd, { force: true, recursive: true });
     await mkdir(cwd, { recursive: true });
 
-    const setup = await runLasso(cwd, ['setup', '--pi', '--detector-command', 'lasso-detector']);
+    const setup = await runLasso(cwd, [
+      'setup',
+      '--harness',
+      'pi',
+      '--detector-command',
+      'lasso-detector',
+    ]);
     const config = await Bun.file(path.join(cwd, '.lasso', 'config.json')).json();
     const extension = await Bun.file(path.join(cwd, '.pi', 'extensions', 'lasso.ts')).text();
     const status = await runLasso(cwd, ['status']);

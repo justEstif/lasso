@@ -64,7 +64,6 @@ async function handleSetup(opts: {
   force?: boolean;
   harness?: 'pi';
   observers?: string;
-  pi?: boolean;
 }) {
   const result = await initProject(process.cwd(), opts);
   console.log('Set up lasso project.');
@@ -75,7 +74,7 @@ async function handleSetup(opts: {
   console.log('\nNext steps:');
   console.log('- Run: lasso status');
   console.log('- Run: lasso tui');
-  if (opts.pi ?? (opts.harness ?? 'pi') === 'pi') console.log('- In Pi, run: /reload');
+  if ((opts.harness ?? 'pi') === 'pi') console.log('- In Pi, run: /reload');
 }
 
 function registerGlobalCommands(
@@ -104,7 +103,6 @@ function registerGlobalCommands(
       'Observers to enable: lint,memory (lint detects recurring corrections; memory stores useful context)',
       'lint,memory',
     )
-    .option('--pi', 'Deprecated alias for --harness pi')
     .action((opts) => handleSetup(opts));
 
   registerStatusAndTuiCommands(program, db, config);
