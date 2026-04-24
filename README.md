@@ -1,26 +1,19 @@
 # lasso
 
-Harness-agnostic observational memory and linting for coding agents.
+Harness-agnostic observational memory for coding agents.
 
-`lasso` gives agent harnesses a small local CLI for:
+`lasso` watches agent work locally, stores useful observations, and helps turn repeated corrections into durable rules.
 
-- **lint observations** — detect recurring user corrections and turn them into proposed lint rules.
-- **memory observations** — store useful project/thread observations and reflections for future context.
-- **TUI status** — inspect observer state from a terminal dashboard.
+## What it does
 
-## Requirements
-
-- [Bun](https://bun.com)
+- **Memory** — record project and user preferences for future context.
+- **Lint observations** — detect repeated corrections and propose lint rules.
+- **Status UI** — inspect observer state from the CLI or TUI.
 
 ## Install
 
 ```bash
 bun install -g @justestif/lasso
-```
-
-Check the CLI:
-
-```bash
 lasso --help
 ```
 
@@ -29,16 +22,10 @@ lasso --help
 Run setup from the project you want lasso to manage:
 
 ```bash
-lasso setup --harness pi
-```
-
-Pi is the default harness, so this is equivalent:
-
-```bash
 lasso setup
 ```
 
-Setup creates:
+This creates:
 
 ```txt
 .lasso/config.json
@@ -57,92 +44,51 @@ The Pi extension adds:
 /lasso-status
 ```
 
-## Choosing observers
+## Observers
 
-Enable both first-party observers:
-
-```bash
-lasso setup --harness pi --observers lint,memory
-```
-
-Memory only:
+Enable both observers:
 
 ```bash
-lasso setup --harness pi --observers memory
+lasso setup --observers lint,memory
 ```
 
-Lint only:
+Or enable one:
 
 ```bash
-lasso setup --harness pi --observers lint
+lasso setup --observers memory
+lasso setup --observers lint
 ```
 
-Observer descriptions:
-
-- `lint` — detects recurring corrections and proposes lint rules.
-- `memory` — stores observations and reflections for future context.
-
-## Lint detector command
-
-The lint observer needs a detector to analyze conversation history and propose lint entries.
-
-A detector command:
-
-1. reads the lasso detector prompt from stdin
-2. writes detector JSON to stdout
-
-Configure it during setup:
+The lint observer needs a detector command. The command reads the detector prompt from stdin and writes detector JSON to stdout.
 
 ```bash
-lasso setup --harness pi --detector-command "your-detector-command"
+lasso setup --observers lint --detector-command "your-detector-command"
 ```
 
-Or later in `.lasso/config.json`:
-
-```json
-{
-  "observers": {
-    "lint": {
-      "enabled": true,
-      "detectorCommand": "your-detector-command"
-    }
-  }
-}
-```
-
-You can also pass it per scan:
+You can also configure it later in `.lasso/config.json` or pass it per scan:
 
 ```bash
 lasso lint scan --detector-command "your-detector-command"
 ```
 
-For tests/manual use, provide detector JSON directly:
-
-```bash
-lasso lint scan --detector-output detector.json
-```
-
 ## Common commands
-
-Combined status:
 
 ```bash
 lasso status
-```
-
-Terminal dashboard:
-
-```bash
 lasso tui
-```
-
-One-shot dashboard render:
-
-```bash
 lasso tui --once
 ```
 
-Lint observer:
+Memory:
+
+```bash
+lasso memory observe --content "User prefers Bun.write for file writes."
+lasso memory reflect --content "Prefer Bun.file/Bun.write for Bun file IO."
+lasso memory status
+lasso memory export
+```
+
+Lint:
 
 ```bash
 lasso lint scan --input transcript.txt --detector-command "your-detector-command"
@@ -155,16 +101,7 @@ lasso lint implement <id-or-prefix>
 lasso lint export
 ```
 
-Memory observer:
-
-```bash
-lasso memory observe --content "User prefers Bun.write for file writes."
-lasso memory reflect --content "Prefer Bun.file/Bun.write for Bun file IO."
-lasso memory status
-lasso memory export
-```
-
-Enable or disable observers:
+Manage observers:
 
 ```bash
 lasso enable lint
@@ -173,86 +110,38 @@ lasso disable memory
 
 ## Local data
 
-Project-local lasso state lives in:
+Lasso stores project-local state in:
 
 ```txt
 .lasso/config.json
 .lasso/lasso.db
 ```
 
-The database is SQLite and uses Drizzle-generated migrations from `drizzle/`.
+The database is SQLite and uses Drizzle migrations from `drizzle/`.
 
-## Release checklist
-
-Before publishing:
+## Development
 
 ```bash
+bun install
 bun run format:check
 bun run lint
 bun test
-bun pm pack --dry-run
 ```
 
-Install-smoke the packed tarball from a temp project:
+## Release
 
-```bash
-bun pm pack --filename /tmp/lasso-smoke.tgz --quiet
-mkdir -p /tmp/lasso-smoke-install
-cd /tmp/lasso-smoke-install
-bun init -y
-bun add /tmp/lasso-smoke.tgz
-bunx lasso --help
-bunx lasso setup --harness pi --observers memory
-bunx lasso status
-```
-
-Publish manually:
-
-```bash
-bun publish --access public
-```
-
-Or publish through GitHub Actions:
-
-1. Configure npm trusted publishing for `@justestif/lasso` on npmjs.com:
-   - Publisher: GitHub Actions
-   - Organization/user: `justEstif`
-   - Repository: `lasso`
-   - Workflow filename: `release.yml`
-2. Add repository secret:
-   - `TAP_GITHUB_TOKEN` — GitHub token allowed to push to `justEstif/homebrew-tap`.
-3. Bump `package.json` version.
-4. Commit the version bump.
-5. Create and push a matching tag:
+Publish releases through GitHub Actions by pushing a version tag:
 
 ```bash
 git tag v0.1.0
 git push origin main --tags
 ```
 
-The release workflow publishes to npm and updates the Homebrew tap formula.
+The release workflow publishes to npm and updates the Homebrew tap.
 
-## Homebrew
-
-After the tap formula is available:
+Homebrew install:
 
 ```bash
 brew tap justEstif/tap
 brew install lasso
-```
-
-## Development
-
-Install dependencies:
-
-```bash
-bun install
-```
-
-Run checks:
-
-```bash
-bun run format:check
-bun run lint
-bun test
 ```
