@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "updatedAt": "2026-04-24T11:19:21.403Z",
+  "resourceSummary": "- 🟢 **TypeScript 7.0 Beta**: Microsoft announced a major architectural shift, porting the compiler to Go for ~10x faster build times.\n- 🟢 **Project Configuration**: `package.json` updated to require `\"typescript\": \"^7.0.0-beta\"` in `peerDependencies`.\n- 🟡 **Registry Status**: The NPM registry's `@beta` tag currently resolves to `6.0.0-beta` instead of v7, indicating a potential mismatch between the announcement and published packages."
+}
