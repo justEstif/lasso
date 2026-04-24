@@ -39,11 +39,15 @@ describe('lint CLI integration', () => {
       'detector.json',
     ]);
     const list = await runLasso(cwd, ['lint', 'list']);
+    const status = await runLasso(cwd, ['lint', 'status']);
 
     expect(scan.exitCode).toBe(0);
     expect(scan.stdout).toContain('1 created');
     expect(list.stdout).toContain('PROPOSED');
     expect(list.stdout).toContain('Avoid antd imports in migrated pages');
+    expect(status.stdout).toContain('Throttle: 1/15 proposed');
+    expect(status.stdout).toContain('Throttle active: no');
+    expect(status.stdout).not.toContain('Last scan: never');
 
     await rm(cwd, { force: true, recursive: true });
   });

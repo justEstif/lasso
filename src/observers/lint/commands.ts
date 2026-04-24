@@ -1,11 +1,15 @@
 import { Database } from 'bun:sqlite';
 
+import type { LassoConfig } from '../../config/load.ts';
+
 import {
   getEntry,
+  getLastScanRun,
   getRecurrences,
   listActiveEntries,
   listEntries,
   LintStatus,
+  recordScanRun,
   updateEntryStatus,
 } from './db';
 import { applyDetectorResult, parseDetectorResult } from './detector.ts';
@@ -29,6 +33,7 @@ export async function handleLintScan(db: Database, options: LintScanOptions) {
   const detectorOutput = await readDetectorOutput(options.detectorOutput);
   const result = parseDetectorResult(detectorOutput);
   const summary = applyDetectorResult(db, result);
+  recordScanRun(db, summary);
   console.log(
     `Lint scan complete: ${summary.created} created, ${summary.recurrences} recurrences, ${summary.skipped} skipped.`,
   );
@@ -104,22 +109,12 @@ export function handleLintTransition(db: Database, id: string, status: LintStatu
   console.log(`Lint entry ${id} transitioned from ${entry.status} to ${status}.`);
 }
 
-export function handleLintStatus(db: Database) {
+export function handleLintStatus(db: Database, config: LassoConfig) {
   const entries = listEntries(db);
-
-  const counts = {
-    proposed: 0,
-    accepted: 0,
-    rejected: 0,
-    deferred: 0,
-    implemented: 0,
-  };
-
-  for (const entry of entries) {
-    if (entry.status in counts) {
-      counts[entry.status as keyof typeof counts]++;
-    }
-  }
+  const counts = countByStatus(entries);
+  const lintConfig = config.observers.lint;
+  const staleCount = countStaleProposed(entries, lintConfig.staleAfterDays);
+  const lastScan = getLastScanRun(db);
 
   console.log('Lint Observer Status:');
   console.log(`- Proposed: ${counts.proposed}`);
@@ -128,6 +123,27 @@ export function handleLintStatus(db: Database) {
   console.log(`- Deferred: ${counts.deferred}`);
   console.log(`- Implemented: ${counts.implemented}`);
   console.log(`\nTotal entries: ${entries.length}`);
+  console.log(`Throttle: ${counts.proposed}/${lintConfig.throttleLimit} proposed`);
+  console.log(`Throttle active: ${counts.proposed >= lintConfig.throttleLimit ? 'yes' : 'no'}`);
+  console.log(`Stale proposed: ${staleCount}`);
+  console.log(`Last scan: ${lastScan?.scanned_at ?? 'never'}`);
+}
+
+function countByStatus(entries: ReturnType<typeof listEntries>) {
+  const counts = { accepted: 0, deferred: 0, implemented: 0, proposed: 0, rejected: 0 };
+
+  for (const entry of entries) {
+    counts[entry.status]++;
+  }
+
+  return counts;
+}
+
+function countStaleProposed(entries: ReturnType<typeof listEntries>, staleAfterDays: number) {
+  const staleBefore = Date.now() - staleAfterDays * 24 * 60 * 60 * 1000;
+  return entries.filter((entry) => {
+    return entry.status === 'proposed' && new Date(entry.created_at).getTime() < staleBefore;
+  }).length;
 }
 
 export function handleLintExport(db: Database, opts: { format: string }) {

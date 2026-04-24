@@ -28,6 +28,18 @@ function applyLintMigrations(db: Database) {
       );
     `);
   });
+
+  applyMigration(db, 'lint', 2, () => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS lint_scan_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        scanned_at TEXT NOT NULL,
+        created_count INTEGER NOT NULL,
+        recurrence_count INTEGER NOT NULL,
+        skipped_count INTEGER NOT NULL
+      );
+    `);
+  });
 }
 
 function applyMemoryMigrations(db: Database) {

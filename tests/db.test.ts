@@ -34,7 +34,7 @@ describe('Database migrations logic', () => {
     const tableNames = tables.map((t) => t.name);
 
     expect(tableNames).toContain('_migrations');
-    expect(tableNames).toContain('lint_entries');
+    expect(tableNames).toContain('lint_scan_runs');
     expect(tableNames).toContain('memory_snapshots');
   });
 
@@ -44,8 +44,8 @@ describe('Database migrations logic', () => {
 
     // Check if migrations were recorded
     const migrations = db.prepare('SELECT * FROM _migrations').all() as Record<string, unknown>[];
-    expect(migrations.length).toBe(2);
-    expect(migrations.some((m) => m.observer === 'lint' && m.version === 1)).toBe(true);
+    expect(migrations.length).toBe(3);
+    expect(migrations.some((m) => m.observer === 'lint' && m.version === 2)).toBe(true);
     expect(migrations.some((m) => m.observer === 'memory' && m.version === 1)).toBe(true);
   });
 
@@ -55,12 +55,12 @@ describe('Database migrations logic', () => {
     // First run
     runMigrations(db);
     let migrations = db.prepare('SELECT * FROM _migrations').all() as Record<string, unknown>[];
-    expect(migrations.length).toBe(2);
+    expect(migrations.length).toBe(3);
 
     // Second run
     runMigrations(db);
     migrations = db.prepare('SELECT * FROM _migrations').all() as Record<string, unknown>[];
-    // Count should still be 2, not duplicated
-    expect(migrations.length).toBe(2);
+    // Count should still be 3, not duplicated
+    expect(migrations.length).toBe(3);
   });
 });

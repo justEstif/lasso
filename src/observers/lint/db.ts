@@ -21,6 +21,14 @@ export interface LintRecurrence {
   observed_at: string;
 }
 
+export interface LintScanRun {
+  id: number;
+  scanned_at: string;
+  created_count: number;
+  recurrence_count: number;
+  skipped_count: number;
+}
+
 export function listEntries(db: Database, status?: LintStatus): LintEntry[] {
   let query = 'SELECT * FROM lint_entries';
   const params: string[] = [];
@@ -104,4 +112,20 @@ export function getRecurrences(db: Database, entryId: string): LintRecurrence[] 
   return db
     .prepare('SELECT * FROM lint_recurrences WHERE entry_id = ? ORDER BY observed_at DESC')
     .all(entryId) as LintRecurrence[];
+}
+
+export function recordScanRun(
+  db: Database,
+  summary: { created: number; recurrences: number; skipped: number },
+): void {
+  db.prepare(
+    `INSERT INTO lint_scan_runs (scanned_at, created_count, recurrence_count, skipped_count)
+     VALUES (?, ?, ?, ?)`,
+  ).run(new Date().toISOString(), summary.created, summary.recurrences, summary.skipped);
+}
+
+export function getLastScanRun(db: Database): LintScanRun | null {
+  return db
+    .prepare('SELECT * FROM lint_scan_runs ORDER BY scanned_at DESC LIMIT 1')
+    .get() as LintScanRun | null;
 }

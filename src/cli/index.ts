@@ -25,19 +25,20 @@ export async function bootstrap() {
     .description('A harness-agnostic CLI for agent observational memory and linting')
     .version(packageJson.version);
 
-  registerGlobalCommands(program);
-  registerLintCommands(program, db);
+  const config = await loadConfig();
+
+  registerGlobalCommands(program, config);
+  registerLintCommands(program, db, config);
   registerMemoryCommands(program);
 
   program.parse();
 }
 
-function registerGlobalCommands(program: Command) {
+function registerGlobalCommands(program: Command, config: Awaited<ReturnType<typeof loadConfig>>) {
   program
     .command('config')
     .description('Show current project configuration')
-    .action(async () => {
-      const config = await loadConfig();
+    .action(() => {
       console.log(JSON.stringify(config, null, 2));
     });
 
@@ -58,7 +59,11 @@ function registerGlobalCommands(program: Command) {
     });
 }
 
-function registerLintCommands(program: Command, db: Database) {
+function registerLintCommands(
+  program: Command,
+  db: Database,
+  config: Awaited<ReturnType<typeof loadConfig>>,
+) {
   const lintCmd = program.command('lint').description('Lint observer commands');
   lintCmd
     .command('scan')
@@ -80,7 +85,7 @@ function registerLintCommands(program: Command, db: Database) {
   lintCmd
     .command('status')
     .description('Counts by state, throttle state, last scan time')
-    .action(() => handleLintStatus(db));
+    .action(() => handleLintStatus(db, config));
   lintCmd
     .command('export')
     .description('Export entries to stdout')
