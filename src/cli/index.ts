@@ -1,9 +1,17 @@
+import { Database } from 'bun:sqlite';
 import { Command } from 'commander';
 
 import packageJson from '../../package.json';
 import { loadConfig } from '../config/load.ts';
 import { getDb } from '../db/index.ts';
 import { runMigrations } from '../db/migrations.ts';
+import {
+  handleLintExport,
+  handleLintList,
+  handleLintShow,
+  handleLintStatus,
+  handleLintTransition,
+} from '../observers/lint/commands.ts';
 
 export async function bootstrap() {
   const program = new Command();
@@ -17,7 +25,7 @@ export async function bootstrap() {
     .version(packageJson.version);
 
   registerGlobalCommands(program);
-  registerLintCommands(program);
+  registerLintCommands(program, db);
   registerMemoryCommands(program);
 
   program.parse();
@@ -49,12 +57,17 @@ function registerGlobalCommands(program: Command) {
     });
 }
 
-function registerLintCommands(program: Command) {
+function registerLintCommands(program: Command, db: Database) {
   const lintCmd = program.command('lint').description('Lint observer commands');
   lintCmd.command('scan').description('Force a detector run for the lint observer').action(() => console.log('Lint scan'));
-  lintCmd.command('list').description('List lint entries').option('--status <status>', 'Filter by status').action((opts) => console.log('Lint list', opts));
-  lintCmd.command('show <id>').description('Show full entry detail').action((id) => console.log(`Lint show ${id}`));
-  lintCmd.command('status').description('Counts by state, throttle state, last scan time').action(() => console.log('Lint status'));
+  lintCmd.command('list').description('List lint entries').option('--status <status>', 'Filter by status').action((opts) => handleLintList(db, opts));
+  lintCmd.command('show <id>').description('Show full entry detail').action((id) => handleLintShow(db, id));
+  lintCmd.command('accept <id>').description('Transition to accepted').action((id) => handleLintTransition(db, id, 'accepted'));
+  lintCmd.command('reject <id>').description('Transition to rejected').action((id) => handleLintTransition(db, id, 'rejected'));
+  lintCmd.command('defer <id>').description('Transition to deferred').action((id) => handleLintTransition(db, id, 'deferred'));
+  lintCmd.command('implement <id>').description('Mark as implemented').action((id) => handleLintTransition(db, id, 'implemented'));
+  lintCmd.command('status').description('Counts by state, throttle state, last scan time').action(() => handleLintStatus(db));
+  lintCmd.command('export').description('Export entries to stdout').option('--format <format>', 'Export format', 'markdown').action((opts) => handleLintExport(db, opts));
 }
 
 function registerMemoryCommands(program: Command) {

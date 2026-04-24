@@ -1,10 +1,11 @@
 ---
 # lasso-x7vb
 title: Lint Observer Implementation
-status: todo
+status: in-progress
 type: feature
+priority: normal
 created_at: 2026-04-24T11:29:46Z
-updated_at: 2026-04-24T11:29:46Z
+updated_at: 2026-04-24T12:32:28Z
 parent: lasso-os9y
 blocked_by:
     - lasso-a4bo
