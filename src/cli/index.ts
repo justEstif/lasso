@@ -13,6 +13,12 @@ import {
   handleLintStatus,
   handleLintTransition,
 } from '../observers/lint/commands.ts';
+import {
+  handleMemoryExport,
+  handleMemoryObserve,
+  handleMemoryReflect,
+  handleMemoryStatus,
+} from '../observers/memory/commands.ts';
 
 export async function bootstrap() {
   const program = new Command();
@@ -29,7 +35,7 @@ export async function bootstrap() {
 
   registerGlobalCommands(program, config);
   registerLintCommands(program, db, config);
-  registerMemoryCommands(program);
+  registerMemoryCommands(program, db, config);
 
   program.parse();
 }
@@ -114,20 +120,34 @@ function registerLintTransitionCommands(lintCmd: Command, db: Database) {
     .action((id) => handleLintTransition(db, id, 'implemented'));
 }
 
-function registerMemoryCommands(program: Command) {
+function registerMemoryCommands(
+  program: Command,
+  db: Database,
+  config: Awaited<ReturnType<typeof loadConfig>>,
+) {
   const memoryCmd = program.command('memory').description('Memory observer commands');
   memoryCmd
     .command('status')
     .description('Show current memory state')
-    .action(() => console.log('Memory status'));
+    .action(() => handleMemoryStatus(db));
   memoryCmd
     .command('observe')
-    .description('Force an observation run')
-    .action(() => console.log('Memory observe'));
+    .description('Record a memory observation snapshot')
+    .option('--content <text>', 'Observation content')
+    .option('--input <path>', 'Observation content file')
+    .option('--scope <scope>', 'Memory scope: thread or resource')
+    .action((opts) => handleMemoryObserve(db, opts, config));
   memoryCmd
     .command('reflect')
-    .description('Force a reflection run')
-    .action(() => console.log('Memory reflect'));
+    .description('Record a consolidated memory reflection')
+    .option('--content <text>', 'Reflection content')
+    .option('--input <path>', 'Reflection content file')
+    .option('--limit <count>', 'Number of recent snapshots to mark as sources', '20')
+    .action((opts) => handleMemoryReflect(db, opts));
+  memoryCmd
+    .command('export')
+    .description('Export memory snapshots and reflections to markdown')
+    .action(() => handleMemoryExport(db));
 }
 
 async function updateObserverEnabled(observer: string, enabled: boolean) {

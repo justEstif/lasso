@@ -27,3 +27,17 @@ export const lintScanRuns = sqliteTable('lint_scan_runs', {
   scanned_at: text('scanned_at').notNull(),
   skipped_count: integer('skipped_count').notNull(),
 });
+
+export const memorySnapshots = sqliteTable('memory_snapshots', {
+  content: text('content').notNull(),
+  created_at: text('created_at').notNull(),
+  id: text('id').primaryKey(),
+  scope: text('scope').notNull(),
+});
+
+export const memoryReflections = sqliteTable('memory_reflections', {
+  consolidated_content: text('consolidated_content').notNull(),
+  created_at: text('created_at').notNull(),
+  id: text('id').primaryKey(),
+  source_snapshot_ids: text('source_snapshot_ids').notNull(),
+});
