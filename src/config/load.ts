@@ -1,3 +1,4 @@
+import { mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
@@ -53,6 +54,8 @@ const defaultConfig: LassoConfig = {
   },
 };
 
+type ObserverName = keyof LassoConfig['observers'];
+
 export async function loadConfig(cwd: string = process.cwd()): Promise<LassoConfig> {
   const globalPath = path.join(homedir(), '.config', 'lasso', 'config.json');
   const projectPath = path.join(cwd, '.lasso', 'config.json');
@@ -75,6 +78,44 @@ export async function loadConfig(cwd: string = process.cwd()): Promise<LassoConf
       },
     },
   };
+}
+
+export async function setObserverEnabled(
+  observer: string,
+  enabled: boolean,
+  cwd: string = process.cwd(),
+) {
+  assertObserverName(observer);
+
+  const projectPath = path.join(cwd, '.lasso', 'config.json');
+  const projectConfig = (await readJsonFile(projectPath)) || {};
+  const currentObservers = asRecord(projectConfig.observers);
+  const currentObserverConfig = asRecord(currentObservers[observer]);
+
+  const nextConfig = {
+    ...projectConfig,
+    observers: {
+      ...currentObservers,
+      [observer]: {
+        ...currentObserverConfig,
+        enabled,
+      },
+    },
+  };
+
+  await mkdir(path.dirname(projectPath), { recursive: true });
+  await Bun.write(projectPath, `${JSON.stringify(nextConfig, null, 2)}\n`);
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function assertObserverName(observer: string): asserts observer is ObserverName {
+  if (observer === 'lint' || observer === 'memory') return;
+  throw new Error(`Unknown observer: ${observer}. Expected one of: lint, memory.`);
 }
 
 async function readJsonFile(filePath: string): Promise<null | Record<string, unknown>> {

@@ -2,7 +2,7 @@ import { Database } from 'bun:sqlite';
 import { Command } from 'commander';
 
 import packageJson from '../../package.json';
-import { loadConfig } from '../config/load.ts';
+import { loadConfig, setObserverEnabled } from '../config/load.ts';
 import { getDb } from '../db/index.ts';
 import { runMigrations } from '../db/migrations.ts';
 import {
@@ -46,16 +46,14 @@ function registerGlobalCommands(program: Command, config: Awaited<ReturnType<typ
     .command('enable <observer>')
     .description('Enable an observer for the current project')
     .action(async (observer) => {
-      console.log(`Enabling observer: ${observer}`);
-      /* Implement in lasso-x7vb */
+      await updateObserverEnabled(observer, true);
     });
 
   program
     .command('disable <observer>')
     .description('Disable an observer for the current project')
     .action(async (observer) => {
-      console.log(`Disabling observer: ${observer}`);
-      /* Implement in lasso-x7vb */
+      await updateObserverEnabled(observer, false);
     });
 }
 
@@ -130,4 +128,14 @@ function registerMemoryCommands(program: Command) {
     .command('reflect')
     .description('Force a reflection run')
     .action(() => console.log('Memory reflect'));
+}
+
+async function updateObserverEnabled(observer: string, enabled: boolean) {
+  try {
+    await setObserverEnabled(observer, enabled);
+    console.log(`${observer} observer ${enabled ? 'enabled' : 'disabled'}.`);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
 }

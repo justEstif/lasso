@@ -21,6 +21,24 @@ async function runLasso(cwd: string, args: string[]) {
   return { exitCode, stderr, stdout };
 }
 
+describe('global CLI integration', () => {
+  test('enable and disable update project config', async () => {
+    const cwd = path.join(projectRoot, 'tests', '.tmp_cli_config');
+    await rm(cwd, { force: true, recursive: true });
+    await mkdir(cwd, { recursive: true });
+
+    const disable = await runLasso(cwd, ['disable', 'lint']);
+    const enable = await runLasso(cwd, ['enable', 'lint']);
+    const config = await runLasso(cwd, ['config']);
+
+    expect(disable.stdout).toContain('lint observer disabled');
+    expect(enable.stdout).toContain('lint observer enabled');
+    expect(config.stdout).toContain('"enabled": true');
+
+    await rm(cwd, { force: true, recursive: true });
+  });
+});
+
 describe('lint CLI detector output integration', () => {
   test('scan persists detector output and list displays it', async () => {
     const cwd = path.join(projectRoot, 'tests', '.tmp_lint_cli');
