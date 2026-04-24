@@ -6,6 +6,8 @@ import { defaultConfig } from '../config/load.ts';
 export interface InitOptions {
   detectorCommand?: string;
   force?: boolean;
+  harness?: 'pi';
+  observers?: string;
   pi?: boolean;
 }
 
@@ -13,6 +15,8 @@ export interface InitResult {
   created: string[];
   skipped: string[];
 }
+
+export type ObserverSelection = 'lint' | 'memory';
 
 const piExtensionLines = [
   "import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';",
@@ -57,30 +61,61 @@ const piExtensionLines = [
   '}',
 ];
 
+export function describeObserver(observer: ObserverSelection) {
+  const descriptions = {
+    lint: 'detects recurring corrections and proposes lint rules',
+    memory: 'stores observations and reflections for future context',
+  } satisfies Record<ObserverSelection, string>;
+
+  return `${observer} (${descriptions[observer]})`;
+}
+
 export async function initProject(cwd: string, options: InitOptions): Promise<InitResult> {
   const result: InitResult = { created: [], skipped: [] };
   await mkdir(path.join(cwd, '.lasso'), { recursive: true });
 
   await writeConfig(cwd, options, result);
-  if (options.pi) await writePiExtension(cwd, options, result);
+  if (shouldInstallPiAdapter(options)) await writePiExtension(cwd, options, result);
 
   return result;
 }
 
 function buildConfig(options: InitOptions) {
+  const observers = parseObservers(options.observers);
   return {
+    harness: {
+      type: options.harness ?? 'pi',
+    },
     observers: {
       lint: {
         ...defaultConfig.observers.lint,
         detectorCommand: options.detectorCommand ?? defaultConfig.observers.lint.detectorCommand,
+        enabled: observers.includes('lint'),
       },
-      memory: defaultConfig.observers.memory,
+      memory: {
+        ...defaultConfig.observers.memory,
+        enabled: observers.includes('memory'),
+      },
     },
   };
 }
 
+function parseObservers(value = 'lint,memory'): ObserverSelection[] {
+  const observers = value.split(',').map((observer) => observer.trim());
+  const valid = observers.filter((observer): observer is ObserverSelection => {
+    return observer === 'lint' || observer === 'memory';
+  });
+
+  if (valid.length !== observers.length) throw new Error('Observers must be lint,memory, or both.');
+  return valid;
+}
+
 function piExtensionTemplate() {
   return `${piExtensionLines.join('\n')}\n`;
+}
+
+function shouldInstallPiAdapter(options: InitOptions) {
+  return options.pi ?? (options.harness ?? 'pi') === 'pi';
 }
 
 async function writeConfig(cwd: string, options: InitOptions, result: InitResult) {

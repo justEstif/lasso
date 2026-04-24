@@ -21,19 +21,22 @@ async function runLasso(cwd: string, args: string[]) {
   return { exitCode, stderr, stdout };
 }
 
-describe('init CLI integration', () => {
-  test('init creates config and optional Pi extension', async () => {
+describe('setup CLI integration', () => {
+  test('setup creates config and optional Pi extension', async () => {
     const cwd = path.join(projectRoot, 'tests', '.tmp_init_cli');
     await rm(cwd, { force: true, recursive: true });
     await mkdir(cwd, { recursive: true });
 
-    const init = await runLasso(cwd, ['init', '--pi', '--detector-command', 'lasso-detector']);
+    const setup = await runLasso(cwd, ['setup', '--pi', '--detector-command', 'lasso-detector']);
     const config = await Bun.file(path.join(cwd, '.lasso', 'config.json')).json();
     const extension = await Bun.file(path.join(cwd, '.pi', 'extensions', 'lasso.ts')).text();
     const status = await runLasso(cwd, ['status']);
 
-    expect(init.exitCode).toBe(0);
-    expect(init.stdout).toContain('Initialized lasso project');
+    expect(setup.exitCode).toBe(0);
+    expect(setup.stdout).toContain('Set up lasso project');
+    expect(setup.stdout).toContain('Harness: pi (Pi coding agent integration)');
+    expect(setup.stdout).toContain('lint (detects recurring corrections');
+    expect(config.harness.type).toBe('pi');
     expect(config.observers.lint.detectorCommand).toBe('lasso-detector');
     expect(extension).toContain('lasso-status');
     expect(status.stdout).toContain('Lint Observer Status');

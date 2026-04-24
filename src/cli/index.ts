@@ -19,7 +19,7 @@ import {
   handleMemoryReflect,
   handleMemoryStatus,
 } from '../observers/memory/commands.ts';
-import { initProject } from '../onboarding/init.ts';
+import { describeObserver, initProject } from '../onboarding/init.ts';
 import { handleTui } from '../tui/dashboard.tsx';
 
 export async function bootstrap() {
@@ -42,21 +42,40 @@ export async function bootstrap() {
   program.parse();
 }
 
+function describeConfiguredObservers(value = 'lint,memory') {
+  return value
+    .split(',')
+    .map((observer) => observer.trim())
+    .filter(
+      (observer): observer is 'lint' | 'memory' => observer === 'lint' || observer === 'memory',
+    )
+    .map((observer) => describeObserver(observer))
+    .join(', ');
+}
+
 function handleGlobalStatus(db: Database, config: Awaited<ReturnType<typeof loadConfig>>) {
   handleLintStatus(db, config);
   console.log('');
   handleMemoryStatus(db);
 }
 
-async function handleInit(opts: { detectorCommand?: string; force?: boolean; pi?: boolean }) {
+async function handleSetup(opts: {
+  detectorCommand?: string;
+  force?: boolean;
+  harness?: 'pi';
+  observers?: string;
+  pi?: boolean;
+}) {
   const result = await initProject(process.cwd(), opts);
-  console.log('Initialized lasso project.');
+  console.log('Set up lasso project.');
+  console.log(`Harness: ${opts.harness ?? 'pi'} (Pi coding agent integration)`);
+  console.log(`Observers: ${describeConfiguredObservers(opts.observers)}`);
   for (const file of result.created) console.log(`Created: ${file}`);
   for (const file of result.skipped) console.log(`Skipped existing: ${file}`);
   console.log('\nNext steps:');
   console.log('- Run: lasso status');
   console.log('- Run: lasso tui');
-  if (opts.pi) console.log('- In Pi, run: /reload');
+  if (opts.pi ?? (opts.harness ?? 'pi') === 'pi') console.log('- In Pi, run: /reload');
 }
 
 function registerGlobalCommands(
@@ -72,24 +91,23 @@ function registerGlobalCommands(
     });
 
   program
-    .command('init')
-    .description('Initialize lasso in the current project')
-    .option('--detector-command <command>', 'Default lint detector command')
+    .command('setup')
+    .description('Set up lasso for a project and harness')
+    .option(
+      '--detector-command <command>',
+      'Lint detector command (analyzes conversation history and emits lint JSON)',
+    )
     .option('--force', 'Overwrite existing lasso files')
-    .option('--pi', 'Install project-local Pi extension')
-    .action((opts) => handleInit(opts));
+    .option('--harness <harness>', 'Harness adapter to install (pi)', 'pi')
+    .option(
+      '--observers <observers>',
+      'Observers to enable: lint,memory (lint detects recurring corrections; memory stores useful context)',
+      'lint,memory',
+    )
+    .option('--pi', 'Deprecated alias for --harness pi')
+    .action((opts) => handleSetup(opts));
 
-  program
-    .command('status')
-    .description('Show combined lasso observer status')
-    .action(() => handleGlobalStatus(db, config));
-
-  program
-    .command('tui')
-    .description('Open the lasso terminal dashboard')
-    .option('--once', 'Render one dashboard frame and exit')
-    .action((opts) => handleTui(db, config, opts));
-
+  registerStatusAndTuiCommands(program, db, config);
   registerObserverToggleCommands(program);
 }
 
@@ -194,6 +212,23 @@ function registerObserverToggleCommands(program: Command) {
     .action(async (observer) => {
       await updateObserverEnabled(observer, false);
     });
+}
+
+function registerStatusAndTuiCommands(
+  program: Command,
+  db: Database,
+  config: Awaited<ReturnType<typeof loadConfig>>,
+) {
+  program
+    .command('status')
+    .description('Show combined lasso observer status')
+    .action(() => handleGlobalStatus(db, config));
+
+  program
+    .command('tui')
+    .description('Open the lasso terminal dashboard')
+    .option('--once', 'Render one dashboard frame and exit')
+    .action((opts) => handleTui(db, config, opts));
 }
 
 async function updateObserverEnabled(observer: string, enabled: boolean) {

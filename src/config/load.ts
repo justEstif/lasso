@@ -3,6 +3,9 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 
 export interface LassoConfig {
+  harness: {
+    type: 'pi';
+  };
   observers: {
     lint: {
       debug: boolean;
@@ -29,6 +32,9 @@ export interface LassoConfig {
 }
 
 export const defaultConfig: LassoConfig = {
+  harness: {
+    type: 'pi',
+  },
   observers: {
     lint: {
       debug: false,
@@ -65,6 +71,11 @@ export async function loadConfig(cwd: string = process.cwd()): Promise<LassoConf
 
   // Deep merge strategy for MVP: override at observer level
   return {
+    harness: {
+      ...defaultConfig.harness,
+      ...globalConfig.harness,
+      ...projectConfig.harness,
+    },
     observers: {
       lint: {
         ...defaultConfig.observers.lint,
