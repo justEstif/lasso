@@ -18,6 +18,12 @@ Default to using Bun instead of Node.js.
 - Prefer `Bun.file` over `node:fs`'s readFile/writeFile
 - Bun.$`ls` instead of execa.
 
+## Local Skills
+
+Project-local skills live under `.agents/skills/**/SKILL.md`.
+
+Use `.agents/skills/drizzle-persistence-cleanup/SKILL.md` when the user asks why raw SQL is being written while Drizzle is installed, reports `bun:sqlite` `db.exec` deprecation diagnostics, asks to use Drizzle, or asks to remove unconfigured Sentry/external logging.
+
 ## When Building
 
 When implementing features, always:

@@ -1,0 +1,17 @@
+[
+  {
+    "input": "Why are we writing raw SQL if Drizzle is installed?",
+    "expected_skill": "drizzle-persistence-cleanup",
+    "reason": "Direct persistence cleanup trigger."
+  },
+  {
+    "input": "Diagnostics says bun:sqlite db.exec is deprecated",
+    "expected_skill": "drizzle-persistence-cleanup",
+    "reason": "Deprecated Bun SQLite API trigger."
+  },
+  {
+    "input": "I don't have Sentry, logging should go somewhere local",
+    "expected_skill": "drizzle-persistence-cleanup",
+    "reason": "Unconfigured external logging trigger."
+  }
+]
