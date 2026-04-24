@@ -2,16 +2,28 @@ import { Command } from 'commander';
 
 import packageJson from '../../package.json';
 import { loadConfig } from '../config/load.ts';
+import { getDb } from '../db/index.ts';
+import { runMigrations } from '../db/migrations.ts';
 
 export async function bootstrap() {
   const program = new Command();
   
+  const db = getDb();
+  runMigrations(db);
+
   program
     .name('lasso')
     .description('A harness-agnostic CLI for agent observational memory and linting')
     .version(packageJson.version);
 
-  // Global commands
+  registerGlobalCommands(program);
+  registerLintCommands(program);
+  registerMemoryCommands(program);
+
+  program.parse();
+}
+
+function registerGlobalCommands(program: Command) {
   program
     .command('config')
     .description('Show current project configuration')
@@ -35,11 +47,6 @@ export async function bootstrap() {
       console.log(`Disabling observer: ${observer}`);
       /* Implement in lasso-x7vb */
     });
-
-  registerLintCommands(program);
-  registerMemoryCommands(program);
-
-  program.parse();
 }
 
 function registerLintCommands(program: Command) {

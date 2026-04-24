@@ -10,7 +10,9 @@
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.59.1",
     "@sentry/bun": "^10.50.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/bun": "latest",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^10.2.1",
     "eslint-plugin-perfectionist": "^5.9.0",
     "eslint-plugin-sonarjs": "^4.0.3",
@@ -22,6 +24,7 @@
     "typescript": "^6.0.0-beta"
   },
   "dependencies": {
-    "commander": "^14.0.3"
+    "commander": "^14.0.3",
+    "drizzle-orm": "^0.45.2"
   }
 }
