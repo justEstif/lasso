@@ -17,48 +17,7 @@ export interface InitResult {
 
 export type ObserverSelection = 'lint' | 'memory';
 
-const piExtensionLines = [
-  "import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';",
-  '',
-  'async function runLasso(args: string[]) {',
-  "  const child = Bun.spawn(['lasso', ...args], {",
-  '    cwd: process.cwd(),',
-  "    stderr: 'pipe',",
-  "    stdout: 'pipe',",
-  '  });',
-  '',
-  '  const [stdout, stderr, exitCode] = await Promise.all([',
-  '    new Response(child.stdout).text(),',
-  '    new Response(child.stderr).text(),',
-  '    child.exited,',
-  '  ]);',
-  '',
-  '  return { exitCode, stderr, stdout };',
-  '}',
-  '',
-  'export default function (pi: ExtensionAPI) {',
-  "  pi.on('session_start', async (_event, ctx) => {",
-  "    const result = await runLasso(['memory', 'status']);",
-  "    if (result.exitCode === 0) ctx.ui.setStatus('lasso', 'lasso memory ready');",
-  '  });',
-  '',
-  "  pi.on('turn_end', async (_event, ctx) => {",
-  "    const result = await runLasso(['lint', 'status']);",
-  "    const text = result.exitCode === 0 ? 'lasso lint checked' : 'lasso check failed';",
-  "    ctx.ui.setStatus('lasso', text);",
-  '  });',
-  '',
-  "  pi.registerCommand('lasso-status', {",
-  "    description: 'Show lasso lint and memory status',",
-  '    handler: async (_args, ctx) => {',
-  "      const lint = await runLasso(['lint', 'status']);",
-  "      const memory = await runLasso(['memory', 'status']);",
-  "      const level = lint.exitCode || memory.exitCode ? 'error' : 'info';",
-  '      ctx.ui.notify(`${lint.stdout}\\n${memory.stdout}`.trim(), level);',
-  '    },',
-  '  });',
-  '}',
-];
+const piExtensionTemplatePath = new URL('templates/pi-extension.ts.template', import.meta.url);
 
 export function describeObserver(observer: ObserverSelection) {
   const descriptions = {
@@ -109,8 +68,8 @@ function parseObservers(value = 'lint,memory'): ObserverSelection[] {
   return valid;
 }
 
-function piExtensionTemplate() {
-  return `${piExtensionLines.join('\n')}\n`;
+async function piExtensionTemplate() {
+  return Bun.file(piExtensionTemplatePath).text();
 }
 
 function shouldInstallPiAdapter(options: InitOptions) {
@@ -145,5 +104,5 @@ async function writeIfAllowed(
 
 async function writePiExtension(cwd: string, options: InitOptions, result: InitResult) {
   const extensionPath = path.join(cwd, '.pi', 'extensions', 'lasso.ts');
-  await writeIfAllowed(extensionPath, piExtensionTemplate(), options, result);
+  await writeIfAllowed(extensionPath, await piExtensionTemplate(), options, result);
 }

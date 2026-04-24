@@ -31,6 +31,8 @@ export interface LassoConfig {
   };
 }
 
+export const defaultObserverModel = 'github-copilot/gpt-5.5-mini';
+
 export const defaultConfig: LassoConfig = {
   harness: {
     type: 'pi',
@@ -40,7 +42,7 @@ export const defaultConfig: LassoConfig = {
       debug: false,
       dedupWindowSize: 50,
       detectorCommand: undefined,
-      detectorModel: 'anthropic/claude-sonnet-4-20250514',
+      detectorModel: defaultObserverModel,
       enabled: true,
       scanThresholdTokens: 5000,
       scanThresholdTurns: 10,
@@ -51,9 +53,9 @@ export const defaultConfig: LassoConfig = {
       debug: false,
       enabled: true,
       observationThreshold: 12_000,
-      observerModel: 'anthropic/claude-sonnet-4-20250514',
+      observerModel: defaultObserverModel,
       reflectionThreshold: 40_000,
-      reflectorModel: 'anthropic/claude-sonnet-4-20250514',
+      reflectorModel: defaultObserverModel,
       retryBackoffTurns: 2,
       scope: 'thread',
     },
@@ -66,26 +68,30 @@ export async function loadConfig(cwd: string = process.cwd()): Promise<LassoConf
   const globalPath = path.join(homedir(), '.config', 'lasso', 'config.json');
   const projectPath = path.join(cwd, '.lasso', 'config.json');
 
-  const globalConfig = (await readJsonFile(globalPath)) || {};
-  const projectConfig = (await readJsonFile(projectPath)) || {};
+  const globalConfig = asRecord(await readJsonFile(globalPath));
+  const projectConfig = asRecord(await readJsonFile(projectPath));
+  const globalHarness = asRecord(globalConfig.harness);
+  const projectHarness = asRecord(projectConfig.harness);
+  const globalObservers = asRecord(globalConfig.observers);
+  const projectObservers = asRecord(projectConfig.observers);
 
   // Deep merge strategy for MVP: override at observer level
   return {
     harness: {
       ...defaultConfig.harness,
-      ...globalConfig.harness,
-      ...projectConfig.harness,
+      ...globalHarness,
+      ...projectHarness,
     },
     observers: {
       lint: {
         ...defaultConfig.observers.lint,
-        ...globalConfig.observers?.lint,
-        ...projectConfig.observers?.lint,
+        ...asRecord(globalObservers.lint),
+        ...asRecord(projectObservers.lint),
       },
       memory: {
         ...defaultConfig.observers.memory,
-        ...globalConfig.observers?.memory,
-        ...projectConfig.observers?.memory,
+        ...asRecord(globalObservers.memory),
+        ...asRecord(projectObservers.memory),
       },
     },
   };

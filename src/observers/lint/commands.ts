@@ -1,6 +1,7 @@
 import { Database } from 'bun:sqlite';
 
 import type { LassoConfig } from '../../config/load.ts';
+import type { LintStatus } from './db';
 
 import {
   getEntry,
@@ -8,7 +9,6 @@ import {
   getRecurrences,
   listActiveEntries,
   listEntries,
-  LintStatus,
   recordScanRun,
   resolveEntryId,
   updateEntryStatus,

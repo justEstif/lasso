@@ -45,6 +45,9 @@ describe('setup CLI integration', () => {
     expect(config.harness.type).toBe('pi');
     expect(config.observers.lint.detectorCommand).toBe('lasso-detector');
     expect(extension).toContain('lasso-status');
+    expect(extension).toContain('void runLasso(args)');
+    expect(extension).toContain("pi.on('turn_end', (_event, ctx) => {");
+    expect(extension).not.toContain("pi.on('turn_end', async");
     expect(status.stdout).toContain('Lint Observer Status');
     expect(status.stdout).toContain('Memory Observer Status');
 

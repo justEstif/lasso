@@ -32,6 +32,7 @@ When implementing features, always:
 - Write unit tests for individual components
 - Write integration tests for end-to-end functionality
 - Run the linter to ensure code quality
+- Run the TypeScript compiler with `bunx tsc --noEmit` to catch type errors
 - Run the formatter to ensure formatted code
 
 ## Testing

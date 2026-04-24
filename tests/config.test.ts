@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 
-import { loadConfig, setObserverEnabled } from '../src/config/load';
+import { defaultObserverModel, loadConfig, setObserverEnabled } from '../src/config/load';
 
 const tmpDir = path.join(process.cwd(), 'tests', '.tmp_test_config');
 
@@ -11,7 +11,10 @@ describe('Config loading', () => {
     const config = await loadConfig(tmpDir);
     expect(config.observers.lint.enabled).toBe(true);
     expect(config.observers.lint.scanThresholdTokens).toBe(5000);
+    expect(config.observers.lint.detectorModel).toBe(defaultObserverModel);
     expect(config.observers.memory.enabled).toBe(true);
+    expect(config.observers.memory.observerModel).toBe(defaultObserverModel);
+    expect(config.observers.memory.reflectorModel).toBe(defaultObserverModel);
   });
 
   test('merges project config over defaults', async () => {

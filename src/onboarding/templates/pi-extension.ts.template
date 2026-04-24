@@ -1,0 +1,62 @@
+import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+
+async function runLasso(args: string[]) {
+  const child = Bun.spawn(['lasso', ...args], {
+    cwd: process.cwd(),
+    stderr: 'pipe',
+    stdout: 'pipe',
+  });
+
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+
+  return { exitCode, stderr, stdout };
+}
+
+interface LassoStatusContext {
+  ui: {
+    setStatus(id: string, text: string): void;
+  };
+}
+
+function updateLassoStatus(
+  args: string[],
+  onSuccess: string,
+  onFailure: string,
+  ctx: LassoStatusContext,
+) {
+  void runLasso(args)
+    .then((result) => {
+      ctx.ui.setStatus('lasso', result.exitCode === 0 ? onSuccess : onFailure);
+    })
+    .catch(() => {
+      ctx.ui.setStatus('lasso', onFailure);
+    });
+}
+
+export default function (pi: ExtensionAPI) {
+  pi.on('session_start', (_event, ctx) => {
+    updateLassoStatus(['memory', 'status'], 'lasso memory ready', 'lasso memory unavailable', ctx);
+  });
+
+  pi.on('turn_end', (_event, ctx) => {
+    updateLassoStatus(['lint', 'status'], 'lasso lint checked', 'lasso check failed', ctx);
+  });
+
+  pi.registerCommand('lasso-status', {
+    description: 'Show lasso lint and memory status',
+    handler: async (_args, ctx) => {
+      const lint = await runLasso(['lint', 'status']);
+      const memory = await runLasso(['memory', 'status']);
+      const level = lint.exitCode || memory.exitCode ? 'error' : 'info';
+      ctx.ui.notify(
+        `${lint.stdout}
+${memory.stdout}`.trim(),
+        level,
+      );
+    },
+  });
+}
