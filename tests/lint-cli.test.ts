@@ -39,15 +39,14 @@ describe('lint CLI detector output integration', () => {
       'detector.json',
     ]);
     const list = await runLasso(cwd, ['lint', 'list']);
+    const shortId = extractShortId(list.stdout);
+    const accept = await runLasso(cwd, ['lint', 'accept', shortId]);
+    const show = await runLasso(cwd, ['lint', 'show', shortId]);
     const status = await runLasso(cwd, ['lint', 'status']);
 
-    expect(scan.exitCode).toBe(0);
-    expect(scan.stdout).toContain('1 created');
-    expect(list.stdout).toContain('PROPOSED');
-    expect(list.stdout).toContain('Avoid antd imports in migrated pages');
-    expect(status.stdout).toContain('Throttle: 1/15 proposed');
-    expect(status.stdout).toContain('Throttle active: no');
-    expect(status.stdout).not.toContain('Last scan: never');
+    expectScanListAndStatus(scan, list, status);
+    expect(accept.stdout).toContain('transitioned from proposed to accepted');
+    expect(show.stdout).toContain('Status: accepted');
 
     await rm(cwd, { force: true, recursive: true });
   });
@@ -105,4 +104,22 @@ function detectorOutput() {
     found_opportunity: true,
     reasoning: 'User stated a convention.',
   });
+}
+
+function expectScanListAndStatus(
+  scan: Awaited<ReturnType<typeof runLasso>>,
+  list: Awaited<ReturnType<typeof runLasso>>,
+  status: Awaited<ReturnType<typeof runLasso>>,
+) {
+  expect(scan.exitCode).toBe(0);
+  expect(scan.stdout).toContain('1 created');
+  expect(list.stdout).toContain('PROPOSED');
+  expect(list.stdout).toContain('Avoid antd imports in migrated pages');
+  expect(status.stdout).toContain('Throttle: 0/15 proposed');
+  expect(status.stdout).toContain('Throttle active: no');
+  expect(status.stdout).not.toContain('Last scan: never');
+}
+
+function extractShortId(output: string) {
+  return output.split(']')[0]?.replace('[', '') ?? '';
 }

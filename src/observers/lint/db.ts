@@ -42,6 +42,22 @@ export function getEntry(db: Database, id: string): LintEntry | null {
   return (prepared.get({ id }) as LintEntry | undefined) ?? null;
 }
 
+export function resolveEntryId(db: Database, idOrPrefix: string): string {
+  const exact = getEntry(db, idOrPrefix);
+  if (exact) return exact.id;
+
+  const matches = drizzle(db)
+    .select({ id: lintEntries.id })
+    .from(lintEntries)
+    .where(sql`${lintEntries.id} LIKE ${`${idOrPrefix}%`}`)
+    .limit(2)
+    .all();
+
+  if (matches.length === 1 && matches[0]?.id) return matches[0].id;
+  if (matches.length > 1) throw new Error(`Lint entry id prefix ${idOrPrefix} is ambiguous.`);
+  throw new Error(`Lint entry ${idOrPrefix} not found.`);
+}
+
 export function getLastScanRun(db: Database): LintScanRun | null {
   const prepared = drizzle(db)
     .select()

@@ -10,6 +10,7 @@ import {
   listEntries,
   LintStatus,
   recordScanRun,
+  resolveEntryId,
   updateEntryStatus,
 } from './db';
 import { applyDetectorResult, parseDetectorResult } from './detector.ts';
@@ -70,11 +71,8 @@ export function handleLintList(db: Database, opts: { status?: LintStatus }) {
 }
 
 export function handleLintShow(db: Database, id: string) {
-  const entry = getEntry(db, id);
-  if (!entry) {
-    console.error(`Lint entry ${id} not found.`);
-    process.exit(1);
-  }
+  const entry = getEntry(db, resolveIdOrExit(db, id));
+  if (!entry) process.exit(1);
 
   console.log(`ID: ${entry.id}`);
   console.log(`Status: ${entry.status}`);
@@ -101,14 +99,21 @@ export function handleLintShow(db: Database, id: string) {
 }
 
 export function handleLintTransition(db: Database, id: string, status: LintStatus) {
-  const entry = getEntry(db, id);
-  if (!entry) {
-    console.error(`Lint entry ${id} not found.`);
+  const resolvedId = resolveIdOrExit(db, id);
+  const entry = getEntry(db, resolvedId);
+  if (!entry) process.exit(1);
+
+  updateEntryStatus(db, resolvedId, status);
+  console.log(`Lint entry ${resolvedId} transitioned from ${entry.status} to ${status}.`);
+}
+
+function resolveIdOrExit(db: Database, id: string) {
+  try {
+    return resolveEntryId(db, id);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
-
-  updateEntryStatus(db, id, status);
-  console.log(`Lint entry ${id} transitioned from ${entry.status} to ${status}.`);
 }
 
 export function handleLintStatus(db: Database, config: LassoConfig) {
