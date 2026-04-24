@@ -12,8 +12,28 @@ Harness-agnostic observational memory for coding agents.
 
 ## Install
 
+With Bun:
+
 ```bash
 bun install -g @justestif/lasso
+```
+
+With npm:
+
+```bash
+npm install -g @justestif/lasso
+```
+
+With Homebrew:
+
+```bash
+brew tap justEstif/tap
+brew install lasso
+```
+
+Check the CLI:
+
+```bash
 lasso --help
 ```
 
@@ -138,10 +158,3 @@ git push origin main --tags
 ```
 
 The release workflow publishes to npm and updates the Homebrew tap.
-
-Homebrew install:
-
-```bash
-brew tap justEstif/tap
-brew install lasso
-```
