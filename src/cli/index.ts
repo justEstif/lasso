@@ -8,6 +8,7 @@ import { runMigrations } from '../db/migrations.ts';
 import {
   handleLintExport,
   handleLintList,
+  handleLintScan,
   handleLintShow,
   handleLintStatus,
   handleLintTransition,
@@ -59,7 +60,7 @@ function registerGlobalCommands(program: Command) {
 
 function registerLintCommands(program: Command, db: Database) {
   const lintCmd = program.command('lint').description('Lint observer commands');
-  lintCmd.command('scan').description('Force a detector run for the lint observer').action(() => console.log('Lint scan'));
+  lintCmd.command('scan').description('Force a detector run for the lint observer').action(() => handleLintScan(db));
   lintCmd.command('list').description('List lint entries').option('--status <status>', 'Filter by status').action((opts) => handleLintList(db, opts));
   lintCmd.command('show <id>').description('Show full entry detail').action((id) => handleLintShow(db, id));
   lintCmd.command('accept <id>').description('Transition to accepted').action((id) => handleLintTransition(db, id, 'accepted'));

@@ -1,5 +1,18 @@
 import { Database } from 'bun:sqlite';
 import { listEntries, getEntry, updateEntryStatus, getRecurrences, LintStatus } from './db';
+import { applyDetectorResult, parseDetectorResult } from './detector.ts';
+
+export async function handleLintScan(db: Database) {
+  const input = await Bun.stdin.text();
+  if (input.trim().length === 0) {
+    console.error('lint scan expects detector JSON on stdin for the MVP scaffold.');
+    process.exit(1);
+  }
+
+  const result = parseDetectorResult(input);
+  const summary = applyDetectorResult(db, result);
+  console.log(`Lint scan complete: ${summary.created} created, ${summary.recurrences} recurrences, ${summary.skipped} skipped.`);
+}
 
 export function handleLintList(db: Database, opts: { status?: LintStatus }) {
   const entries = listEntries(db, opts.status);
