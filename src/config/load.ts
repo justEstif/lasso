@@ -6,6 +6,7 @@ export interface LassoConfig {
     lint: {
       debug: boolean;
       dedupWindowSize: number;
+      detectorCommand?: string;
       detectorModel: string;
       enabled: boolean;
       scanThresholdTokens: number;
@@ -31,6 +32,7 @@ const defaultConfig: LassoConfig = {
     lint: {
       debug: false,
       dedupWindowSize: 50,
+      detectorCommand: undefined,
       detectorModel: 'anthropic/claude-sonnet-4-20250514',
       enabled: true,
       scanThresholdTokens: 5000,

@@ -14,14 +14,16 @@ import {
 } from './db';
 import { applyDetectorResult, parseDetectorResult } from './detector.ts';
 import { buildLintDetectorPrompt } from './prompt.ts';
+import { runDetector } from './runner.ts';
 
 interface LintScanOptions {
+  detectorCommand?: string;
   detectorOutput?: string;
   input?: string;
   printPrompt?: boolean;
 }
 
-export async function handleLintScan(db: Database, options: LintScanOptions) {
+export async function handleLintScan(db: Database, options: LintScanOptions, config: LassoConfig) {
   const conversation = await readConversation(options);
   const prompt = buildLintDetectorPrompt(conversation, listActiveEntries(db, 50));
 
@@ -30,7 +32,7 @@ export async function handleLintScan(db: Database, options: LintScanOptions) {
     return;
   }
 
-  const detectorOutput = await readDetectorOutput(options.detectorOutput);
+  const detectorOutput = await readDetectorOutput(prompt, options, config);
   const result = parseDetectorResult(detectorOutput);
   const summary = applyDetectorResult(db, result);
   recordScanRun(db, summary);
@@ -45,13 +47,13 @@ async function readConversation(options: LintScanOptions) {
   return '';
 }
 
-async function readDetectorOutput(outputPath?: string) {
-  if (outputPath) return Bun.file(outputPath).text();
-  const input = await Bun.stdin.text();
-  if (input.trim().length === 0) {
-    throw new Error('lint scan needs --detector-output <file> unless --print-prompt is used.');
-  }
-  return input;
+async function readDetectorOutput(prompt: string, options: LintScanOptions, config: LassoConfig) {
+  if (options.detectorOutput) return Bun.file(options.detectorOutput).text();
+
+  return runDetector({
+    command: options.detectorCommand ?? config.observers.lint.detectorCommand,
+    prompt,
+  });
 }
 
 export function handleLintList(db: Database, opts: { status?: LintStatus }) {

@@ -21,7 +21,7 @@ async function runLasso(cwd: string, args: string[]) {
   return { exitCode, stderr, stdout };
 }
 
-describe('lint CLI integration', () => {
+describe('lint CLI detector output integration', () => {
   test('scan persists detector output and list displays it', async () => {
     const cwd = path.join(projectRoot, 'tests', '.tmp_lint_cli');
     await rm(cwd, { force: true, recursive: true });
@@ -52,6 +52,45 @@ describe('lint CLI integration', () => {
     await rm(cwd, { force: true, recursive: true });
   });
 });
+
+describe('lint CLI detector command integration', () => {
+  test('scan can invoke a detector command', async () => {
+    const cwd = path.join(projectRoot, 'tests', '.tmp_lint_cli_runner');
+    await rm(cwd, { force: true, recursive: true });
+    await mkdir(cwd, { recursive: true });
+    await writeFile(path.join(cwd, 'emit-detector.js'), detectorCommandScript());
+
+    const scan = await runLasso(cwd, [
+      'lint',
+      'scan',
+      '--detector-command',
+      'bun emit-detector.js',
+    ]);
+    const list = await runLasso(cwd, ['lint', 'list']);
+
+    expect(scan.exitCode).toBe(0);
+    expect(scan.stdout).toContain('1 created');
+    expect(list.stdout).toContain('Prefer shadcn components');
+
+    await rm(cwd, { force: true, recursive: true });
+  });
+});
+
+function detectorCommandScript() {
+  return `
+process.stdin.resume();
+process.stdin.on('end', () => {
+  console.log(JSON.stringify({
+    entries: [{
+      description: 'Prefer shadcn components',
+      matches_existing_id: null,
+    }],
+    found_opportunity: true,
+    reasoning: 'User stated a convention.'
+  }));
+});
+`;
+}
 
 function detectorOutput() {
   return JSON.stringify({

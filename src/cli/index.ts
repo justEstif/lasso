@@ -70,8 +70,12 @@ function registerLintCommands(
     .description('Force a detector run for the lint observer')
     .option('--input <path>', 'Conversation transcript file')
     .option('--detector-output <path>', 'Detector JSON output file')
+    .option(
+      '--detector-command <command>',
+      'Command that reads prompt from stdin and writes detector JSON',
+    )
     .option('--print-prompt', 'Print the detector prompt instead of applying results')
-    .action((opts) => handleLintScan(db, opts));
+    .action((opts) => handleLintScan(db, opts, config));
   lintCmd
     .command('list')
     .description('List lint entries')
