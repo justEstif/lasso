@@ -11,7 +11,7 @@ describe('Database Persistence', () => {
 
   test('getDb creates database and enables WAL mode', async () => {
     await rm(tmpDir, { force: true, recursive: true });
-    await mkdir(path.join(tmpDir, '.lasso'), { recursive: true });
+    await mkdir(tmpDir, { recursive: true });
 
     const db = getDb(tmpDir);
     expect(db).toBeInstanceOf(Database);
