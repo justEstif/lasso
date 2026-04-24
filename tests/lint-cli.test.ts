@@ -41,11 +41,14 @@ describe('lint CLI detector output integration', () => {
     const list = await runLasso(cwd, ['lint', 'list']);
     const shortId = extractShortId(list.stdout);
     const accept = await runLasso(cwd, ['lint', 'accept', shortId]);
+    const invalidReject = await runLasso(cwd, ['lint', 'reject', shortId]);
     const show = await runLasso(cwd, ['lint', 'show', shortId]);
     const status = await runLasso(cwd, ['lint', 'status']);
 
     expectScanListAndStatus(scan, list, status);
     expect(accept.stdout).toContain('transitioned from proposed to accepted');
+    expect(invalidReject.exitCode).toBe(1);
+    expect(invalidReject.stderr).toContain('Cannot transition lint entry');
     expect(show.stdout).toContain('Status: accepted');
 
     await rm(cwd, { force: true, recursive: true });

@@ -103,8 +103,27 @@ export function handleLintTransition(db: Database, id: string, status: LintStatu
   const entry = getEntry(db, resolvedId);
   if (!entry) process.exit(1);
 
+  if (!canTransition(entry.status, status)) {
+    console.error(`Cannot transition lint entry ${resolvedId} from ${entry.status} to ${status}.`);
+    process.exit(1);
+  }
+
   updateEntryStatus(db, resolvedId, status);
   console.log(`Lint entry ${resolvedId} transitioned from ${entry.status} to ${status}.`);
+}
+
+function canTransition(from: LintStatus, to: LintStatus) {
+  if (from === to) return true;
+
+  const allowed: Record<LintStatus, LintStatus[]> = {
+    accepted: ['deferred', 'implemented'],
+    deferred: ['accepted', 'rejected'],
+    implemented: [],
+    proposed: ['accepted', 'deferred', 'rejected'],
+    rejected: [],
+  };
+
+  return allowed[from].includes(to);
 }
 
 function resolveIdOrExit(db: Database, id: string) {
