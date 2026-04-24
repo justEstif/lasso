@@ -14,16 +14,20 @@ function createMigratedDatabase() {
 describe('lint detector entry creation', () => {
   test('creates proposed lint entries from detector JSON', () => {
     const db = createMigratedDatabase();
-    const result = parseDetectorResult(JSON.stringify({
-      entries: [{
-        description: 'Avoid antd imports in migrated pages',
-        matches_existing_id: null,
-        proposed_form: 'no-restricted-imports: antd',
-        source_excerpt: 'stop pulling Form.Item from antd',
-      }],
-      found_opportunity: true,
-      reasoning: 'User stated a recurring convention.',
-    }));
+    const result = parseDetectorResult(
+      JSON.stringify({
+        entries: [
+          {
+            description: 'Avoid antd imports in migrated pages',
+            matches_existing_id: null,
+            proposed_form: 'no-restricted-imports: antd',
+            source_excerpt: 'stop pulling Form.Item from antd',
+          },
+        ],
+        found_opportunity: true,
+        reasoning: 'User stated a recurring convention.',
+      }),
+    );
 
     const summary = applyDetectorResult(db, result);
     const entries = listEntries(db);
@@ -39,10 +43,12 @@ describe('lint detector recurrence handling', () => {
   test('adds recurrence for matched existing entry', () => {
     const db = createMigratedDatabase();
     const created = applyDetectorResult(db, {
-      entries: [{
-        description: 'Avoid antd imports in migrated pages',
-        matches_existing_id: null,
-      }],
+      entries: [
+        {
+          description: 'Avoid antd imports in migrated pages',
+          matches_existing_id: null,
+        },
+      ],
       found_opportunity: true,
       reasoning: 'Initial signal.',
     });
@@ -50,11 +56,13 @@ describe('lint detector recurrence handling', () => {
 
     const existing = listEntries(db)[0];
     const summary = applyDetectorResult(db, {
-      entries: [{
-        description: 'Avoid antd imports in migrated pages',
-        matches_existing_id: existing?.id ?? '',
-        source_excerpt: 'again, no antd here',
-      }],
+      entries: [
+        {
+          description: 'Avoid antd imports in migrated pages',
+          matches_existing_id: existing?.id ?? '',
+          source_excerpt: 'again, no antd here',
+        },
+      ],
       found_opportunity: true,
       reasoning: 'Duplicate signal.',
     });

@@ -18,22 +18,25 @@ describe('Config loading', () => {
     await rm(tmpDir, { force: true, recursive: true });
     const lassoDir = path.join(tmpDir, '.lasso');
     await mkdir(lassoDir, { recursive: true });
-    
-    await writeFile(path.join(lassoDir, 'config.json'), JSON.stringify({
-      observers: {
-        lint: {
-          enabled: false,
-          scanThresholdTokens: 1000
-        }
-      }
-    }));
+
+    await writeFile(
+      path.join(lassoDir, 'config.json'),
+      JSON.stringify({
+        observers: {
+          lint: {
+            enabled: false,
+            scanThresholdTokens: 1000,
+          },
+        },
+      }),
+    );
 
     const config = await loadConfig(tmpDir);
     expect(config.observers.lint.enabled).toBe(false);
     expect(config.observers.lint.scanThresholdTokens).toBe(1000);
     expect(config.observers.lint.scanThresholdTurns).toBe(10); // from default
     expect(config.observers.memory.enabled).toBe(true); // from default
-    
+
     await rm(tmpDir, { force: true, recursive: true });
   });
 });

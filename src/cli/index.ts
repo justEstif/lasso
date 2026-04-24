@@ -16,7 +16,7 @@ import {
 
 export async function bootstrap() {
   const program = new Command();
-  
+
   const db = getDb();
   runMigrations(db);
 
@@ -48,7 +48,7 @@ function registerGlobalCommands(program: Command) {
       console.log(`Enabling observer: ${observer}`);
       /* Implement in lasso-x7vb */
     });
-    
+
   program
     .command('disable <observer>')
     .description('Disable an observer for the current project')
@@ -60,20 +60,62 @@ function registerGlobalCommands(program: Command) {
 
 function registerLintCommands(program: Command, db: Database) {
   const lintCmd = program.command('lint').description('Lint observer commands');
-  lintCmd.command('scan').description('Force a detector run for the lint observer').action(() => handleLintScan(db));
-  lintCmd.command('list').description('List lint entries').option('--status <status>', 'Filter by status').action((opts) => handleLintList(db, opts));
-  lintCmd.command('show <id>').description('Show full entry detail').action((id) => handleLintShow(db, id));
-  lintCmd.command('accept <id>').description('Transition to accepted').action((id) => handleLintTransition(db, id, 'accepted'));
-  lintCmd.command('reject <id>').description('Transition to rejected').action((id) => handleLintTransition(db, id, 'rejected'));
-  lintCmd.command('defer <id>').description('Transition to deferred').action((id) => handleLintTransition(db, id, 'deferred'));
-  lintCmd.command('implement <id>').description('Mark as implemented').action((id) => handleLintTransition(db, id, 'implemented'));
-  lintCmd.command('status').description('Counts by state, throttle state, last scan time').action(() => handleLintStatus(db));
-  lintCmd.command('export').description('Export entries to stdout').option('--format <format>', 'Export format', 'markdown').action((opts) => handleLintExport(db, opts));
+  lintCmd
+    .command('scan')
+    .description('Force a detector run for the lint observer')
+    .action(() => handleLintScan(db));
+  lintCmd
+    .command('list')
+    .description('List lint entries')
+    .option('--status <status>', 'Filter by status')
+    .action((opts) => handleLintList(db, opts));
+  lintCmd
+    .command('show <id>')
+    .description('Show full entry detail')
+    .action((id) => handleLintShow(db, id));
+  registerLintTransitionCommands(lintCmd, db);
+  lintCmd
+    .command('status')
+    .description('Counts by state, throttle state, last scan time')
+    .action(() => handleLintStatus(db));
+  lintCmd
+    .command('export')
+    .description('Export entries to stdout')
+    .option('--format <format>', 'Export format', 'markdown')
+    .action((opts) => handleLintExport(db, opts));
+}
+
+function registerLintTransitionCommands(lintCmd: Command, db: Database) {
+  lintCmd
+    .command('accept <id>')
+    .description('Transition to accepted')
+    .action((id) => handleLintTransition(db, id, 'accepted'));
+  lintCmd
+    .command('reject <id>')
+    .description('Transition to rejected')
+    .action((id) => handleLintTransition(db, id, 'rejected'));
+  lintCmd
+    .command('defer <id>')
+    .description('Transition to deferred')
+    .action((id) => handleLintTransition(db, id, 'deferred'));
+  lintCmd
+    .command('implement <id>')
+    .description('Mark as implemented')
+    .action((id) => handleLintTransition(db, id, 'implemented'));
 }
 
 function registerMemoryCommands(program: Command) {
   const memoryCmd = program.command('memory').description('Memory observer commands');
-  memoryCmd.command('status').description('Show current memory state').action(() => console.log('Memory status'));
-  memoryCmd.command('observe').description('Force an observation run').action(() => console.log('Memory observe'));
-  memoryCmd.command('reflect').description('Force a reflection run').action(() => console.log('Memory reflect'));
+  memoryCmd
+    .command('status')
+    .description('Show current memory state')
+    .action(() => console.log('Memory status'));
+  memoryCmd
+    .command('observe')
+    .description('Force an observation run')
+    .action(() => console.log('Memory observe'));
+  memoryCmd
+    .command('reflect')
+    .description('Force a reflection run')
+    .action(() => console.log('Memory reflect'));
 }

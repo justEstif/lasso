@@ -58,8 +58,10 @@ function applyMigration(db: Database, observer: string, version: number, up: () 
     // Run the migration transaction
     db.transaction(() => {
       up();
-      
-      const insertStmt = db.prepare('INSERT INTO _migrations (observer, version, applied_at) VALUES (?, ?, ?)');
+
+      const insertStmt = db.prepare(
+        'INSERT INTO _migrations (observer, version, applied_at) VALUES (?, ?, ?)',
+      );
       insertStmt.run(observer, version, new Date().toISOString());
     })();
   }

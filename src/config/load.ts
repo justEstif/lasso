@@ -55,8 +55,8 @@ export async function loadConfig(cwd: string = process.cwd()): Promise<LassoConf
   const globalPath = path.join(homedir(), '.config', 'lasso', 'config.json');
   const projectPath = path.join(cwd, '.lasso', 'config.json');
 
-  const globalConfig = await readJsonFile(globalPath) || {};
-  const projectConfig = await readJsonFile(projectPath) || {};
+  const globalConfig = (await readJsonFile(globalPath)) || {};
+  const projectConfig = (await readJsonFile(projectPath)) || {};
 
   // Deep merge strategy for MVP: override at observer level
   return {
@@ -78,7 +78,7 @@ export async function loadConfig(cwd: string = process.cwd()): Promise<LassoConf
 async function readJsonFile(filePath: string): Promise<null | Record<string, unknown>> {
   const file = Bun.file(filePath);
   if (!(await file.exists())) return null;
-  
+
   try {
     return (await file.json()) as Record<string, unknown>;
   } catch (error) {

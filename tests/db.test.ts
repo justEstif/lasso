@@ -41,17 +41,17 @@ describe('Database migrations logic', () => {
   test('runMigrations records migrations correctly', () => {
     const db = new Database(':memory:');
     runMigrations(db);
-    
+
     // Check if migrations were recorded
     const migrations = db.prepare('SELECT * FROM _migrations').all() as Record<string, unknown>[];
     expect(migrations.length).toBe(2);
-    expect(migrations.some(m => m.observer === 'lint' && m.version === 1)).toBe(true);
-    expect(migrations.some(m => m.observer === 'memory' && m.version === 1)).toBe(true);
+    expect(migrations.some((m) => m.observer === 'lint' && m.version === 1)).toBe(true);
+    expect(migrations.some((m) => m.observer === 'memory' && m.version === 1)).toBe(true);
   });
 
   test('runMigrations is idempotent', () => {
     const db = new Database(':memory:');
-    
+
     // First run
     runMigrations(db);
     let migrations = db.prepare('SELECT * FROM _migrations').all() as Record<string, unknown>[];

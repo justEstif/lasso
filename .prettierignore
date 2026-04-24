@@ -1,0 +1,6 @@
+node_modules
+.lasso
+.beans
+.pi
+.git
+bun.lock
