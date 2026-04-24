@@ -1,131 +1,123 @@
-import { Database } from 'bun:sqlite';
+import type { Database } from 'bun:sqlite';
+
+import { desc, eq, inArray, sql } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/bun-sqlite';
 import { randomUUID } from 'node:crypto';
+
+import { lintEntries, lintRecurrences, lintScanRuns } from '../../db/schema.ts';
 
 export type LintStatus = 'proposed' | 'accepted' | 'rejected' | 'deferred' | 'implemented';
 
-export interface LintEntry {
-  id: string;
-  status: LintStatus;
-  description: string;
-  proposed_form: string | null;
-  source_excerpt: string | null;
-  detector_version: string;
-  created_at: string;
-  updated_at: string;
-}
+export type LintEntry = typeof lintEntries.$inferSelect & { status: LintStatus };
+export type LintRecurrence = typeof lintRecurrences.$inferSelect;
+export type LintScanRun = typeof lintScanRuns.$inferSelect;
 
-export interface LintRecurrence {
-  id: number;
-  entry_id: string;
-  note: string;
-  observed_at: string;
-}
+export function addRecurrence(db: Database, entryId: string, note: string): void {
+  const orm = drizzle(db);
+  const now = new Date().toISOString();
 
-export interface LintScanRun {
-  id: number;
-  scanned_at: string;
-  created_count: number;
-  recurrence_count: number;
-  skipped_count: number;
-}
-
-export function listEntries(db: Database, status?: LintStatus): LintEntry[] {
-  let query = 'SELECT * FROM lint_entries';
-  const params: string[] = [];
-
-  if (status) {
-    query += ' WHERE status = ?';
-    params.push(status);
-  }
-
-  query += ' ORDER BY created_at DESC';
-
-  return db.prepare(query).all(...params) as LintEntry[];
-}
-
-export function getEntry(db: Database, id: string): LintEntry | null {
-  return db.prepare('SELECT * FROM lint_entries WHERE id = ?').get(id) as LintEntry | null;
-}
-
-export function listActiveEntries(db: Database, limit: number): LintEntry[] {
-  return db
-    .prepare(
-      `SELECT * FROM lint_entries
-       WHERE status IN ('proposed', 'accepted', 'deferred')
-       ORDER BY updated_at DESC
-       LIMIT ?`,
-    )
-    .all(limit) as LintEntry[];
+  orm.insert(lintRecurrences).values({ entry_id: entryId, note, observed_at: now }).run();
+  orm.update(lintEntries).set({ updated_at: now }).where(eq(lintEntries.id, entryId)).run();
 }
 
 export function createEntry(
   db: Database,
-  data: Omit<LintEntry, 'id' | 'created_at' | 'updated_at'>,
+  data: Omit<LintEntry, 'created_at' | 'id' | 'updated_at'>,
 ): LintEntry {
   const id = randomUUID();
   const now = new Date().toISOString();
+  const entry = { ...data, created_at: now, id, updated_at: now };
 
-  db.prepare(
-    `
-    INSERT INTO lint_entries (id, status, description, proposed_form, source_excerpt, detector_version, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `,
-  ).run(
-    id,
-    data.status,
-    data.description,
-    data.proposed_form,
-    data.source_excerpt,
-    data.detector_version,
-    now,
-    now,
-  );
-
+  drizzle(db).insert(lintEntries).values(entry).run();
   return getEntry(db, id)!;
 }
 
-export function updateEntryStatus(db: Database, id: string, status: LintStatus): void {
-  const now = new Date().toISOString();
-  db.prepare('UPDATE lint_entries SET status = ?, updated_at = ? WHERE id = ?').run(
-    status,
-    now,
-    id,
-  );
+export function getEntry(db: Database, id: string): LintEntry | null {
+  const prepared = drizzle(db)
+    .select()
+    .from(lintEntries)
+    .where(eq(lintEntries.id, sql.placeholder('id')))
+    .prepare();
+
+  return (prepared.get({ id }) as LintEntry | undefined) ?? null;
 }
 
-export function addRecurrence(db: Database, entryId: string, note: string): void {
-  db.prepare(
-    `
-    INSERT INTO lint_recurrences (entry_id, note, observed_at)
-    VALUES (?, ?, ?)
-  `,
-  ).run(entryId, note, new Date().toISOString());
+export function getLastScanRun(db: Database): LintScanRun | null {
+  const prepared = drizzle(db)
+    .select()
+    .from(lintScanRuns)
+    .orderBy(desc(lintScanRuns.scanned_at))
+    .limit(1)
+    .prepare();
 
-  // Also bump the updated_at on the entry
-  db.prepare('UPDATE lint_entries SET updated_at = ? WHERE id = ?').run(
-    new Date().toISOString(),
-    entryId,
-  );
+  return (prepared.get() as LintScanRun | undefined) ?? null;
 }
 
 export function getRecurrences(db: Database, entryId: string): LintRecurrence[] {
-  return db
-    .prepare('SELECT * FROM lint_recurrences WHERE entry_id = ? ORDER BY observed_at DESC')
-    .all(entryId) as LintRecurrence[];
+  const prepared = drizzle(db)
+    .select()
+    .from(lintRecurrences)
+    .where(eq(lintRecurrences.entry_id, sql.placeholder('entryId')))
+    .orderBy(desc(lintRecurrences.observed_at))
+    .prepare();
+
+  return prepared.all({ entryId }) as LintRecurrence[];
+}
+
+export function listActiveEntries(db: Database, limit: number): LintEntry[] {
+  const prepared = drizzle(db)
+    .select()
+    .from(lintEntries)
+    .where(inArray(lintEntries.status, ['proposed', 'accepted', 'deferred']))
+    .orderBy(desc(lintEntries.updated_at))
+    .limit(sql.placeholder('limit'))
+    .prepare();
+
+  return prepared.all({ limit }) as LintEntry[];
+}
+
+export function listEntries(db: Database, status?: LintStatus): LintEntry[] {
+  if (status) return listEntriesByStatus(db, status);
+
+  const prepared = drizzle(db)
+    .select()
+    .from(lintEntries)
+    .orderBy(desc(lintEntries.created_at))
+    .prepare();
+
+  return prepared.all() as LintEntry[];
 }
 
 export function recordScanRun(
   db: Database,
   summary: { created: number; recurrences: number; skipped: number },
 ): void {
-  db.prepare(
-    `INSERT INTO lint_scan_runs (scanned_at, created_count, recurrence_count, skipped_count)
-     VALUES (?, ?, ?, ?)`,
-  ).run(new Date().toISOString(), summary.created, summary.recurrences, summary.skipped);
+  drizzle(db)
+    .insert(lintScanRuns)
+    .values({
+      created_count: summary.created,
+      recurrence_count: summary.recurrences,
+      scanned_at: new Date().toISOString(),
+      skipped_count: summary.skipped,
+    })
+    .run();
 }
 
-export function getLastScanRun(db: Database): LintScanRun | null {
-  return db
-    .prepare('SELECT * FROM lint_scan_runs ORDER BY scanned_at DESC LIMIT 1')
-    .get() as LintScanRun | null;
+export function updateEntryStatus(db: Database, id: string, status: LintStatus): void {
+  drizzle(db)
+    .update(lintEntries)
+    .set({ status, updated_at: new Date().toISOString() })
+    .where(eq(lintEntries.id, id))
+    .run();
+}
+
+function listEntriesByStatus(db: Database, status: LintStatus): LintEntry[] {
+  const prepared = drizzle(db)
+    .select()
+    .from(lintEntries)
+    .where(eq(lintEntries.status, sql.placeholder('status')))
+    .orderBy(desc(lintEntries.created_at))
+    .prepare();
+
+  return prepared.all({ status }) as LintEntry[];
 }

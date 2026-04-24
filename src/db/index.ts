@@ -22,7 +22,7 @@ export function getDb(cwd: string = process.cwd()): Database {
   dbInstance = new Database(dbPath);
 
   // Enable WAL mode for better concurrency
-  dbInstance.exec('PRAGMA journal_mode = WAL;');
+  dbInstance.run('PRAGMA journal_mode = WAL;');
 
   return dbInstance;
 }
