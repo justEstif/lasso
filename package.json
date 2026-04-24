@@ -1,9 +1,13 @@
 {
   "name": "lasso",
   "module": "index.ts",
+  "bin": {
+    "lasso": "./index.ts"
+  },
   "type": "module",
   "private": true,
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.59.1",
     "@sentry/bun": "^10.50.0",
     "@types/bun": "latest",
@@ -11,9 +15,13 @@
     "eslint-plugin-perfectionist": "^5.9.0",
     "eslint-plugin-sonarjs": "^4.0.3",
     "eslint-plugin-unicorn": "^64.0.0",
-    "fast-check": "^4.7.0"
+    "fast-check": "^4.7.0",
+    "typescript-eslint": "^8.59.0"
   },
   "peerDependencies": {
     "typescript": "^6.0.0-beta"
+  },
+  "dependencies": {
+    "commander": "^14.0.3"
   }
 }
