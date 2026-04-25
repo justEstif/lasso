@@ -54,6 +54,13 @@ function expectGeneratedPiExtension(extension: string) {
   expect(extension).toContain('serializeConversation(convertToLlm(messages))');
   expect(extension).toContain("runLasso(['lint', 'scan'], { input: conversation })");
   expect(extension).toContain("runLasso(['memory', 'observe'], { input: conversation })");
+  expect(extension).toContain("pi.on('before_agent_start', async (event) => {");
+  expect(extension).toContain("runLasso(['memory', 'export'])");
+  expect(extension).toContain('=== LASSO MEMORY ===');
+  expect(extension).toContain("pi.on('session_before_compact', async (event, ctx) => {");
+  expect(extension).toContain("runLasso(['memory', 'reflect', '--emit-content']");
+  expect(extension).toContain('messagesToSummarize');
+  expect(extension).toContain('turnPrefixMessages');
   expect(extension).toContain("pi.registerCommand('lasso:lint:scan'");
   expect(extension).toContain("pi.registerCommand('lasso:memory:status'");
   expect(extension).toContain("pi.on('turn_end', (_event, ctx) => {");

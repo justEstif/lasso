@@ -33,6 +33,16 @@ async function runLasso(args: string[], options: RunLassoOptions = {}): Promise<
   return { exitCode, stderr, stdout };
 }
 
+interface LassoCompactionEvent {
+  preparation: {
+    firstKeptEntryId: string;
+    messagesToSummarize: unknown[];
+    previousSummary?: string;
+    tokensBefore: number;
+    turnPrefixMessages: unknown[];
+  };
+}
+
 interface LassoStatusContext {
   sessionManager?: {
     getBranch(): Array<{ type: string; message?: unknown }>;
@@ -78,6 +88,14 @@ function summarizeMemoryStatus(stdout: string) {
   return `memory ${snapshots} snapshots`;
 }
 
+function buildCompactionReflection(event: LassoCompactionEvent) {
+  const { messagesToSummarize, previousSummary, turnPrefixMessages } = event.preparation;
+  const conversation = serializeConversation(convertToLlm([...messagesToSummarize, ...turnPrefixMessages]));
+  const previous = previousSummary ? `\n\nPrevious summary:\n${previousSummary}` : '';
+
+  return `# Lasso memory reflection${previous}\n\n## Conversation to retain\n\n${conversation}`.trim();
+}
+
 function observeWithLasso(ctx: LassoStatusContext) {
   const conversation = serializePiConversation(ctx).trim();
   if (!conversation) {
@@ -119,8 +137,34 @@ export default function (pi: ExtensionAPI) {
     updateLassoStatus(ctx);
   });
 
+  pi.on('before_agent_start', async (event) => {
+    const memory = await runLasso(['memory', 'export']);
+    if (memory.exitCode !== 0 || !memory.stdout.trim()) return;
+
+    return {
+      systemPrompt: `=== LASSO MEMORY ===\n${memory.stdout.trim()}\n====================\n\n${event.systemPrompt}`,
+    };
+  });
+
   pi.on('turn_end', (_event, ctx) => {
     observeWithLasso(ctx);
+  });
+
+  pi.on('session_before_compact', async (event, ctx) => {
+    ctx.ui.setStatus('lasso', '[lasso: reflecting...]');
+    const reflectionInput = buildCompactionReflection(event);
+    const result = await runLasso(['memory', 'reflect', '--emit-content'], { input: reflectionInput });
+    ctx.ui.setStatus('lasso', undefined);
+
+    if (result.exitCode !== 0 || !result.stdout.trim()) return;
+
+    return {
+      compaction: {
+        firstKeptEntryId: event.preparation.firstKeptEntryId,
+        summary: result.stdout.trim(),
+        tokensBefore: event.preparation.tokensBefore,
+      },
+    };
   });
 
   pi.registerCommand('lasso', {
