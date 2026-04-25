@@ -21,6 +21,8 @@ describe('observation entry parser', () => {
       content: 'User prefers Bun APIs over Node.js builtins',
       observedAt: '2025-04-25',
       priority: 'high',
+      referencedDate: null,
+      relativeOffset: null,
     });
   });
 
@@ -60,6 +62,8 @@ describe('plain text fallback', () => {
     expect(entries[0]?.priority).toBe('medium');
     expect(entries[0]?.category).toBe('');
     expect(entries[0]?.content).toBe('User prefers direct Bun APIs for file writes.');
+    expect(entries[0]?.referencedDate).toBeNull();
+    expect(entries[0]?.relativeOffset).toBeNull();
   });
 });
 
@@ -85,5 +89,68 @@ describe('priority emoji helper', () => {
     expect(priorityEmoji('high')).toBe('🔴');
     expect(priorityEmoji('medium')).toBe('🟡');
     expect(priorityEmoji('low')).toBe('🟢');
+  });
+});
+
+describe('temporal anchor parsing', () => {
+  test('extracts referenced date from entry text', () => {
+    const content = [
+      '## Schedule',
+      '- 🔴 2025-04-25: Flight booked for [ref:2025-01-31] conference trip',
+    ].join('\n');
+
+    const entries = parseObservationEntries(content);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.referencedDate).toBe('2025-01-31');
+    expect(entries[0]?.relativeOffset).toBeNull();
+    expect(entries[0]?.content).toBe('Flight booked for conference trip');
+  });
+
+  test('extracts positive relative offset from entry text', () => {
+    const content = [
+      '## Plans',
+      '- 🟡 2025-04-25: Review scheduled [rel:+3d] from today',
+    ].join('\n');
+
+    const entries = parseObservationEntries(content);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.referencedDate).toBeNull();
+    expect(entries[0]?.relativeOffset).toBe(3);
+    expect(entries[0]?.content).toBe('Review scheduled from today');
+  });
+
+  test('extracts negative relative offset from entry text', () => {
+    const content = [
+      '## History',
+      '- 🟢 2025-04-25: Issue reported [rel:-2d] before fix',
+    ].join('\n');
+
+    const entries = parseObservationEntries(content);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.relativeOffset).toBe(-2);
+    expect(entries[0]?.content).toBe('Issue reported before fix');
+  });
+});
+
+describe('temporal anchor combinations', () => {
+  test('extracts both referenced date and relative offset', () => {
+    const content = [
+      '## Combined',
+      '- 🔴 2025-04-25: Deadline is [ref:2025-06-15] [rel:+5d] prep time',
+    ].join('\n');
+
+    const entries = parseObservationEntries(content);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.referencedDate).toBe('2025-06-15');
+    expect(entries[0]?.relativeOffset).toBe(5);
+    expect(entries[0]?.content).toBe('Deadline is prep time');
+  });
+
+  test('entries without temporal anchors have null values', () => {
+    const entries = parseObservationEntries(emojiLogContent);
+    for (const entry of entries) {
+      expect(entry.referencedDate).toBeNull();
+      expect(entry.relativeOffset).toBeNull();
+    }
   });
 });

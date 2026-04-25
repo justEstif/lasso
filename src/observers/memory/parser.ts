@@ -5,6 +5,8 @@ export interface ParsedEntry {
   content: string;
   observedAt: string;
   priority: ObservationPriority;
+  referencedDate: null | string;
+  relativeOffset: null | number;
 }
 
 const PRIORITY_MAP: Record<string, ObservationPriority> = {
@@ -18,6 +20,9 @@ const PRIORITY_MAP: Record<string, ObservationPriority> = {
 
 const ENTRY_LINE_PATTERN =
   /^[-*]\s+(?<priority>\p{Emoji_Presentation}|\[high\]|\[medium\]|\[low\])\s+(?<date>\d{4}-\d{2}-\d{2}):\s+(?<text>.{1,500})$/u;
+
+const REFERENCED_DATE_PATTERN = /\[ref:(?<date>\d{4}-\d{2}-\d{2})\]/;
+const RELATIVE_OFFSET_PATTERN = /\[rel:(?<sign>[+-])(?<days>\d+)d\]/;
 
 const HEADER_PATTERN = /^##\s+(.+)/;
 
@@ -51,12 +56,39 @@ export function priorityEmoji(priority: ObservationPriority): string {
   return emojis[priority];
 }
 
+function collapseSpaces(text: string): string {
+  return text.replaceAll(/\s{2,}/g, ' ').trim();
+}
+
+function extractTemporal(text: string): { cleanedText: string; referencedDate: null | string; relativeOffset: null | number } {
+  let cleanedText = text;
+  let referencedDate: null | string = null;
+  let relativeOffset: null | number = null;
+
+  const refMatch = REFERENCED_DATE_PATTERN.exec(cleanedText);
+  if (refMatch?.groups?.date) {
+    referencedDate = refMatch.groups.date;
+    cleanedText = cleanedText.replace(REFERENCED_DATE_PATTERN, ' ').trim();
+  }
+
+  const relMatch = RELATIVE_OFFSET_PATTERN.exec(cleanedText);
+  if (relMatch?.groups) {
+    const days = Number(relMatch.groups.days ?? 0);
+    relativeOffset = relMatch.groups.sign === '-' ? -days : days;
+    cleanedText = cleanedText.replace(RELATIVE_OFFSET_PATTERN, ' ').trim();
+  }
+
+  return { cleanedText: collapseSpaces(cleanedText), referencedDate, relativeOffset };
+}
+
 function fallbackEntry(content: string): ParsedEntry {
   return {
     category: '',
     content: content.trim(),
     observedAt: today(),
     priority: 'medium',
+    referencedDate: null,
+    relativeOffset: null,
   };
 }
 
@@ -73,14 +105,18 @@ function parseEntryLine(line: string, category: string): null | ParsedEntry {
   const priority = normalizePriority(match.groups.priority ?? '');
   if (!priority) return null;
 
-  const text = (match.groups.text ?? '').trim();
-  if (text.length === 0) return null;
+  const rawText = (match.groups.text ?? '').trim();
+  if (rawText.length === 0) return null;
+
+  const { cleanedText, referencedDate, relativeOffset } = extractTemporal(rawText);
 
   return {
     category,
-    content: text,
+    content: cleanedText,
     observedAt: match.groups.date ?? today(),
     priority,
+    referencedDate,
+    relativeOffset,
   };
 }
 

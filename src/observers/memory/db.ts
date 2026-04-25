@@ -1,5 +1,5 @@
 import { Database } from 'bun:sqlite';
-import { and, desc, eq, gte, isNull, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNull, lte, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/bun-sqlite';
 
 import type { ObservationPriority, ParsedEntry } from './parser.ts';
@@ -35,7 +35,11 @@ export interface EntryFilterOptions {
   before?: string;
   limit?: number;
   priority?: ObservationPriority;
+  sortField?: EntrySortField;
+  sortOrder?: 'asc' | 'desc';
 }
+
+export type EntrySortField = 'created_at' | 'observed_at' | 'referenced_date';
 
 export type MemoryReflection = typeof memoryReflections.$inferSelect;
 
@@ -78,6 +82,8 @@ export function createEntries(db: Database, input: CreateEntriesInput): Observat
     id: crypto.randomUUID(),
     observed_at: entry.observedAt,
     priority: entry.priority,
+    referenced_date: entry.referencedDate ?? null,
+    relative_offset: entry.relativeOffset ?? null,
     snapshot_id: input.snapshotId,
   }));
 
@@ -132,17 +138,20 @@ export function getObservationState(db: Database, scope: MemoryScope): number {
 }
 
 export function listEntries(db: Database, options: EntryFilterOptions = {}): ObservationEntry[] {
-  const { after, before, limit = 100, priority } = options;
+  const { after, before, limit = 100, priority, sortField, sortOrder } = options;
   const conditions = [];
 
   if (priority) conditions.push(eq(observationEntries.priority, priority));
   if (after) conditions.push(gte(observationEntries.observed_at, after));
   if (before) conditions.push(lte(observationEntries.observed_at, before));
 
+  const column = observationEntries[sortField ?? 'observed_at'];
+  const order = sortOrder === 'asc' ? asc(column) : desc(column);
+
   const query = drizzle(db)
     .select()
     .from(observationEntries)
-    .orderBy(desc(observationEntries.observed_at), desc(observationEntries.created_at));
+    .orderBy(order, desc(observationEntries.created_at));
 
   if (conditions.length > 0) {
     query.where(and(...conditions));

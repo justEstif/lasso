@@ -267,6 +267,10 @@ function registerMemoryReflectAndContext(
     .option('--priority <level>', 'Filter by priority: high, medium, low')
     .option('--after <date>', 'Show entries observed on or after date (YYYY-MM-DD)')
     .option('--before <date>', 'Show entries observed on or before date (YYYY-MM-DD)')
+    .option(
+      '--sort <field:order>',
+      'Sort entries by field:order — field is observed_at|created_at|referenced_date, order is asc|desc',
+    )
     .action((opts) => handleMemoryContext(db, opts));
 }
 

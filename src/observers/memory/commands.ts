@@ -35,6 +35,7 @@ interface MemoryContextOptions {
   limit?: string;
   priority?: string;
   query?: string;
+  sort?: string;
 }
 
 interface MemoryExportOptions {
@@ -85,7 +86,8 @@ export function handleMemoryContext(db: Database, options: MemoryContextOptions)
   for (const entry of entries) {
     const emoji = priorityEmoji(entry.priority as ObservationPriority);
     const category = entry.category ? `[${entry.category}] ` : '';
-    console.log(`- ${emoji} ${entry.observed_at}: ${category}${entry.content}`);
+    const temporal = formatTemporalAnchor(entry);
+    console.log(`- ${emoji} ${entry.observed_at}: ${category}${temporal}${entry.content}`);
   }
 }
 
@@ -170,11 +172,27 @@ function buildEntryFilter(options: MemoryContextOptions | MemoryExportOptions) {
   const priority = (options as MemoryContextOptions).priority as
     | ObservationPriority
     | undefined;
+  const sort = (options as MemoryContextOptions).sort?.split(':') as
+    | ['created_at' | 'observed_at' | 'referenced_date', 'asc' | 'desc']
+    | undefined;
+
   return {
     after: options.after,
     before: options.before,
     priority,
+    sortField: sort?.[0],
+    sortOrder: sort?.[1],
   };
+}
+
+function formatTemporalAnchor(entry: { referenced_date: null | string; relative_offset: null | number }): string {
+  const parts: string[] = [];
+  if (entry.referenced_date) parts.push(`ref:${entry.referenced_date}`);
+  if (entry.relative_offset != null) {
+    const sign = entry.relative_offset >= 0 ? '+' : '';
+    parts.push(`rel:${sign}${entry.relative_offset}d`);
+  }
+  return parts.length > 0 ? `[${parts.join(', ')}] ` : '';
 }
 
 function groupByCategory(entries: ReturnType<typeof listEntries>) {
@@ -207,7 +225,8 @@ function renderEntries(entries: ReturnType<typeof listEntries>) {
     if (category) console.log(`### ${category}\n`);
     for (const entry of categoryEntries) {
       const emoji = priorityEmoji(entry.priority as ObservationPriority);
-      console.log(`- ${emoji} ${entry.observed_at}: ${entry.content}`);
+      const temporal = formatTemporalAnchor(entry);
+      console.log(`- ${emoji} ${entry.observed_at}: ${temporal}${entry.content}`);
     }
     console.log();
   }

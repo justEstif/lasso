@@ -104,11 +104,12 @@ function buildMemoryObserverPrompt(conversation: string) {
 
 Use this format:
 ## Category Name
-- \u{1F534} YYYY-MM-DD: Observation detail (high priority — critical facts, decisions, corrections)
+- \u{1F534} YYYY-MM-DD: Observation detail [ref:YYYY-MM-DD] [rel:+Nd] (high priority — critical facts, decisions, corrections)
 - \u{1F7E1} YYYY-MM-DD: Observation detail (medium priority — useful patterns, preferences)
 - \u{1F7E2} YYYY-MM-DD: Observation detail (low priority — minor notes, future reference)
 
 Categories group related observations. Use 2-5 categories. Each bullet gets a priority emoji and date.
+Temporal anchors are optional: [ref:YYYY-MM-DD] for dates mentioned in content (e.g. a flight date), [rel:+Nd] or [rel:-Nd] for days relative to the observation date.
 Keep only useful project facts, decisions, corrections, and continuation state.
 
 <conversation>

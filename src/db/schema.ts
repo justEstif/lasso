@@ -37,6 +37,8 @@ export const observationEntries = sqliteTable('observation_entries', {
   priority: text('priority', {
     enum: ['high', 'low', 'medium'],
   }).notNull(),
+  referenced_date: text('referenced_date'),
+  relative_offset: integer('relative_offset'),
   snapshot_id: text('snapshot_id')
     .notNull()
     .references(() => memorySnapshots.id),
