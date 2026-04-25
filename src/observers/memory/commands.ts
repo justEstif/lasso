@@ -20,6 +20,12 @@ import {
 } from './db.ts';
 import { parseObservationEntries, priorityEmoji } from './parser.ts';
 import { estimateTokens } from './tokens.ts';
+import {
+  getDefaultTemplate,
+  getWorkingMemory,
+  listAllWorkingMemory,
+  upsertWorkingMemory,
+} from './working-db.ts';
 
 export interface ShouldObserveResult {
   currentTokens: number;
@@ -55,6 +61,15 @@ interface MemoryReflectOptions {
   content?: string;
   input?: string;
   limit?: string;
+}
+
+interface MemoryWorkingOptions {
+  edit?: boolean;
+  init?: boolean;
+  reset?: boolean;
+  resource_id?: string;
+  stdin?: string;
+  thread_id?: string;
 }
 
 export function checkShouldObserve(
@@ -168,10 +183,15 @@ export function handleMemoryStatus(db: Database) {
   console.log(`Last reflection: ${reflections[0]?.created_at ?? 'never'}`);
 }
 
+export function handleMemoryWorking(db: Database, options: MemoryWorkingOptions) {
+  if (options.edit) return handleWorkingEdit(db, options);
+  if (options.init) return handleWorkingInit(db, options);
+  if (options.reset) return handleWorkingReset(db, options);
+  return handleWorkingShow(db, options);
+}
+
 function buildEntryFilter(options: MemoryContextOptions | MemoryExportOptions) {
-  const priority = (options as MemoryContextOptions).priority as
-    | ObservationPriority
-    | undefined;
+  const priority = (options as MemoryContextOptions).priority as ObservationPriority | undefined;
   const sort = (options as MemoryContextOptions).sort?.split(':') as
     | ['created_at' | 'observed_at' | 'referenced_date', 'asc' | 'desc']
     | undefined;
@@ -185,7 +205,10 @@ function buildEntryFilter(options: MemoryContextOptions | MemoryExportOptions) {
   };
 }
 
-function formatTemporalAnchor(entry: { referenced_date: null | string; relative_offset: null | number }): string {
+function formatTemporalAnchor(entry: {
+  referenced_date: null | string;
+  relative_offset: null | number;
+}): string {
   const parts: string[] = [];
   if (entry.referenced_date) parts.push(`ref:${entry.referenced_date}`);
   if (entry.relative_offset != null) {
@@ -205,6 +228,73 @@ function groupByCategory(entries: ReturnType<typeof listEntries>) {
   }
 
   return groups;
+}
+
+function handleWorkingEdit(db: Database, options: MemoryWorkingOptions) {
+  const content = options.stdin?.trim();
+  if (!content) {
+    console.error('memory working --edit needs content via stdin.');
+    process.exit(1);
+  }
+
+  const record = upsertWorkingMemory(db, {
+    content,
+    resourceId: options.resource_id,
+    threadId: options.thread_id,
+  });
+  console.log(`Working memory ${record.id} updated.`);
+}
+
+function handleWorkingInit(db: Database, options: MemoryWorkingOptions) {
+  const existing = getWorkingMemory(db, {
+    resourceId: options.resource_id,
+    threadId: options.thread_id,
+  });
+  if (existing) {
+    console.log(`Working memory already exists (${existing.id}). Use --edit to update.`);
+    return;
+  }
+
+  const record = upsertWorkingMemory(db, {
+    content: getDefaultTemplate(),
+    resourceId: options.resource_id,
+    threadId: options.thread_id,
+  });
+  console.log(`Working memory ${record.id} initialized with default template.`);
+}
+
+function handleWorkingReset(db: Database, options: MemoryWorkingOptions) {
+  const record = upsertWorkingMemory(db, {
+    content: getDefaultTemplate(),
+    resourceId: options.resource_id,
+    threadId: options.thread_id,
+  });
+  console.log(`Working memory ${record.id} reset to default template.`);
+}
+
+function handleWorkingShow(db: Database, options: MemoryWorkingOptions) {
+  const record = getWorkingMemory(db, {
+    resourceId: options.resource_id,
+    threadId: options.thread_id,
+  });
+  if (!record) {
+    const all = listAllWorkingMemory(db);
+    if (all.length === 0) {
+      console.log('No working memory found. Use --init to create one.');
+      return;
+    }
+    for (const entry of all) {
+      printWorkingMemoryEntry(entry);
+    }
+    return;
+  }
+  printWorkingMemoryEntry(record);
+}
+
+function printWorkingMemoryEntry(entry: { content: string; id: string; updated_at: string }) {
+  console.log(`# Working Memory (${entry.id})`);
+  console.log(`Updated: ${entry.updated_at}\n`);
+  console.log(entry.content);
 }
 
 async function readMemoryContent(options: MemoryObserveOptions | MemoryReflectOptions) {

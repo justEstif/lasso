@@ -107,10 +107,9 @@ describe('temporal anchor parsing', () => {
   });
 
   test('extracts positive relative offset from entry text', () => {
-    const content = [
-      '## Plans',
-      '- 🟡 2025-04-25: Review scheduled [rel:+3d] from today',
-    ].join('\n');
+    const content = ['## Plans', '- 🟡 2025-04-25: Review scheduled [rel:+3d] from today'].join(
+      '\n',
+    );
 
     const entries = parseObservationEntries(content);
     expect(entries).toHaveLength(1);
@@ -120,10 +119,9 @@ describe('temporal anchor parsing', () => {
   });
 
   test('extracts negative relative offset from entry text', () => {
-    const content = [
-      '## History',
-      '- 🟢 2025-04-25: Issue reported [rel:-2d] before fix',
-    ].join('\n');
+    const content = ['## History', '- 🟢 2025-04-25: Issue reported [rel:-2d] before fix'].join(
+      '\n',
+    );
 
     const entries = parseObservationEntries(content);
     expect(entries).toHaveLength(1);

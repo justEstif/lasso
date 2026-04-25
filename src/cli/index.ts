@@ -20,6 +20,7 @@ import {
   handleMemoryReflect,
   handleMemoryShouldObserve,
   handleMemoryStatus,
+  handleMemoryWorking,
 } from '../observers/memory/commands.ts';
 import { describeObserver, initProject } from '../onboarding/init.ts';
 import { resolveLassoPaths } from '../project/paths.ts';
@@ -109,6 +110,11 @@ function printSetupSummary(
       ? '  Restart Pi or run /reload, then try /lasso status'
       : '  Run lasso status',
   );
+}
+
+async function readStdinContent(): Promise<string | undefined> {
+  if (process.stdin.isTTY) return undefined;
+  return Bun.stdin.text();
 }
 
 function registerGlobalCommands(
@@ -227,6 +233,7 @@ function registerMemoryCommands(
     .action((opts) => handleMemoryObserve(db, opts, config));
   registerMemoryReflectAndContext(memoryCmd, db);
   registerMemoryObserveCheck(memoryCmd, db, config);
+  registerMemoryWorkingCommand(memoryCmd, db);
   memoryCmd
     .command('export')
     .description('Export memory observations and reflections to markdown')
@@ -248,10 +255,7 @@ function registerMemoryObserveCheck(
     .action((opts) => handleMemoryShouldObserve(db, Number(opts.tokens), config));
 }
 
-function registerMemoryReflectAndContext(
-  memoryCmd: Command,
-  db: Database,
-) {
+function registerMemoryReflectAndContext(memoryCmd: Command, db: Database) {
   memoryCmd
     .command('reflect')
     .description('Record a consolidated memory reflection')
@@ -272,6 +276,21 @@ function registerMemoryReflectAndContext(
       'Sort entries by field:order — field is observed_at|created_at|referenced_date, order is asc|desc',
     )
     .action((opts) => handleMemoryContext(db, opts));
+}
+
+function registerMemoryWorkingCommand(memoryCmd: Command, db: Database) {
+  memoryCmd
+    .command('working')
+    .description('View or manage working memory scratchpad')
+    .option('--init', 'Initialize working memory with a default template')
+    .option('--edit', 'Update working memory content from stdin')
+    .option('--reset', 'Reset working memory to the default template')
+    .option('--resource-id <id>', 'Scope working memory to a specific resource')
+    .option('--thread-id <id>', 'Scope working memory to a specific thread')
+    .action(async (opts) => {
+      const stdin = opts.edit ? await readStdinContent() : undefined;
+      handleMemoryWorking(db, { ...opts, stdin });
+    });
 }
 
 function registerObserverToggleCommands(program: Command) {

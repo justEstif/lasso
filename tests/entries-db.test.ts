@@ -114,7 +114,14 @@ describe('entry snapshot scoping', () => {
     createEntries(db, { entries: sampleEntries(), snapshotId: first.id });
     createEntries(db, {
       entries: [
-        { category: 'Test', content: 'Extra entry', observedAt: '2025-04-25', priority: 'high', referencedDate: null, relativeOffset: null },
+        {
+          category: 'Test',
+          content: 'Extra entry',
+          observedAt: '2025-04-25',
+          priority: 'high',
+          referencedDate: null,
+          relativeOffset: null,
+        },
       ],
       snapshotId: second.id,
     });

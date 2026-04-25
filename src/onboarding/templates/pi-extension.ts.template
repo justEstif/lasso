@@ -245,11 +245,24 @@ export default function (pi: ExtensionAPI) {
 
   pi.on('before_agent_start', async (event, ctx) => {
     const query = serializePiConversation(ctx).slice(-4000);
-    const memory = await runLasso(['memory', 'context', '--query', query]);
-    if (memory.exitCode !== 0 || !memory.stdout.trim() || memory.stdout.includes('No relevant memory found.')) return;
+    const [memoryResult, workingResult] = await Promise.all([
+      runLasso(['memory', 'context', '--query', query]),
+      runLasso(['memory', 'working']),
+    ]);
 
+    const sections: string[] = [];
+
+    if (memoryResult.exitCode === 0 && memoryResult.stdout.trim() && !memoryResult.stdout.includes('No relevant memory found.')) {
+      sections.push(`=== LASSO MEMORY ===\n${memoryResult.stdout.trim()}\n====================`);
+    }
+
+    if (workingResult.exitCode === 0 && workingResult.stdout.trim() && !workingResult.stdout.includes('No working memory found')) {
+      sections.push(`=== LASSO WORKING MEMORY ===\n${workingResult.stdout.trim()}\n===========================`);
+    }
+
+    if (sections.length === 0) return;
     return {
-      systemPrompt: `=== LASSO MEMORY ===\n${memory.stdout.trim()}\n====================\n\n${event.systemPrompt}`,
+      systemPrompt: `${sections.join('\n\n')}\n\n${event.systemPrompt}`,
     };
   });
 

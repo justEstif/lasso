@@ -108,12 +108,8 @@
           "name": "lint_recurrences_entry_id_lint_entries_id_fk",
           "tableFrom": "lint_recurrences",
           "tableTo": "lint_entries",
-          "columnsFrom": [
-            "entry_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["entry_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }

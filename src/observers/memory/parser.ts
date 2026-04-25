@@ -60,7 +60,11 @@ function collapseSpaces(text: string): string {
   return text.replaceAll(/\s{2,}/g, ' ').trim();
 }
 
-function extractTemporal(text: string): { cleanedText: string; referencedDate: null | string; relativeOffset: null | number } {
+function extractTemporal(text: string): {
+  cleanedText: string;
+  referencedDate: null | string;
+  relativeOffset: null | number;
+} {
   let cleanedText = text;
   let referencedDate: null | string = null;
   let relativeOffset: null | number = null;

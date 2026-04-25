@@ -160,10 +160,7 @@ export function listEntries(db: Database, options: EntryFilterOptions = {}): Obs
   return query.limit(limit).all();
 }
 
-export function listEntriesBySnapshot(
-  db: Database,
-  snapshotId: string,
-): ObservationEntry[] {
+export function listEntriesBySnapshot(db: Database, snapshotId: string): ObservationEntry[] {
   return drizzle(db)
     .select()
     .from(observationEntries)

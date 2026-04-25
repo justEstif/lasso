@@ -69,3 +69,11 @@ export const memoryObservationState = sqliteTable('memory_observation_state', {
   scope: text('scope').notNull(),
   updated_at: text('updated_at').notNull(),
 });
+
+export const workingMemory = sqliteTable('working_memory', {
+  content: text('content').notNull(),
+  id: text('id').primaryKey(),
+  resource_id: text('resource_id'),
+  thread_id: text('thread_id'),
+  updated_at: text('updated_at').notNull(),
+});
