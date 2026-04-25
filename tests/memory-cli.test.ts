@@ -47,9 +47,9 @@ describe('memory CLI integration', () => {
       '--content',
       'Prefer Bun.file and Bun.write for file IO.',
     ]);
-    const emitted = await runLasso(
+    const stdinReflect = await runLasso(
       cwd,
-      ['memory', 'reflect', '--emit-content'],
+      ['memory', 'reflect'],
       'Compaction-ready memory summary.',
     );
     const status = await runLasso(cwd, ['memory', 'status']);
@@ -58,7 +58,7 @@ describe('memory CLI integration', () => {
     expect(observe.stdout).toContain('Memory snapshot');
     expect(reflect.stdout).toContain('created from 1 snapshots');
     expect(status.stdout).toContain('- Snapshots: 1');
-    expect(emitted.stdout).toContain('Compaction-ready memory summary.');
+    expect(stdinReflect.stdout).toContain('created from 1 snapshots');
     expect(status.stdout).toContain('- Reflections: 2');
     expect(exported.stdout).toContain('Prefer Bun.file and Bun.write');
     expect(exported.stdout).toContain('User prefers direct Bun APIs');

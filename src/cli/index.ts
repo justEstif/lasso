@@ -191,7 +191,6 @@ function registerMemoryCommands(
     .option('--content <text>', 'Reflection content')
     .option('--input <path>', 'Reflection content file')
     .option('--limit <count>', 'Number of recent snapshots to mark as sources', '20')
-    .option('--emit-content', 'Print reflected content for harness compaction')
     .action((opts) => handleMemoryReflect(db, opts));
   memoryCmd
     .command('export')

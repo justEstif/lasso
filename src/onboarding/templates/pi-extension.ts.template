@@ -1,3 +1,5 @@
+import type { Model } from '@mariozechner/pi-ai';
+import { completeSimple } from '@mariozechner/pi-ai';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import { convertToLlm, serializeConversation } from '@mariozechner/pi-coding-agent';
 
@@ -41,12 +43,20 @@ interface LassoCompactionEvent {
     tokensBefore: number;
     turnPrefixMessages: unknown[];
   };
+  signal?: AbortSignal;
 }
 
 interface LassoStatusContext {
+  model?: Model<any>;
+  modelRegistry?: {
+    getApiKeyAndHeaders(model: Model<any>): Promise<{ apiKey?: string; error?: string; headers?: Record<string, string>; ok: boolean }>;
+    getAll(): Model<any>[];
+    hasConfiguredAuth(model: Model<any>): boolean;
+  };
   sessionManager?: {
     getBranch(): Array<{ type: string; message?: unknown }>;
   };
+  signal?: AbortSignal;
   ui: {
     notify(message: string, level?: string): void;
     setStatus(id: string, text: string | undefined): void;
@@ -88,15 +98,82 @@ function summarizeMemoryStatus(stdout: string) {
   return `memory ${snapshots} snapshots`;
 }
 
-function buildCompactionReflection(event: LassoCompactionEvent) {
+function buildMemoryObserverPrompt(conversation: string) {
+  return `Extract durable memory from this agent conversation. Return JSON with keys summary, currentTask, and suggestedResponse. Keep only useful project facts, decisions, corrections, and continuation state.\n\n<conversation>\n${conversation}\n</conversation>`;
+}
+
+function buildMemoryReflectorPrompt(event: LassoCompactionEvent) {
   const { messagesToSummarize, previousSummary, turnPrefixMessages } = event.preparation;
   const conversation = serializeConversation(convertToLlm([...messagesToSummarize, ...turnPrefixMessages]));
   const previous = previousSummary ? `\n\nPrevious summary:\n${previousSummary}` : '';
 
-  return `# Lasso memory reflection${previous}\n\n## Conversation to retain\n\n${conversation}`.trim();
+  return `Create a compaction-ready memory summary for this agent session.${previous}\n\nInclude goals, decisions, important technical details, current state, blockers, and next steps. Return JSON with keys threadSummary and resourceSummary.\n\n<conversation>\n${conversation}\n</conversation>`;
 }
 
-function observeWithLasso(ctx: LassoStatusContext) {
+function chooseModel(ctx: LassoStatusContext) {
+  const configured = ctx.modelRegistry?.getAll?.().filter((model) => ctx.modelRegistry?.hasConfiguredAuth(model)) ?? [];
+  if (ctx.model && configured.some((model) => model.provider === ctx.model?.provider && model.id === ctx.model?.id)) {
+    return ctx.model;
+  }
+  return configured[0] ?? ctx.model;
+}
+
+function extractRawText(response: any) {
+  const chunks: string[] = [];
+  const content = Array.isArray(response?.content) ? response.content : [];
+  for (const part of content) {
+    if (typeof part?.text === 'string') chunks.push(part.text);
+    if (typeof part?.content === 'string') chunks.push(part.content);
+  }
+  if (typeof response?.text === 'string') chunks.push(response.text);
+  if (typeof response?.content === 'string') chunks.push(response.content);
+  return chunks.join('\n').trim();
+}
+
+function extractJsonObject(text: string) {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+  const candidate = (fenced || text).trim();
+  const start = candidate.indexOf('{');
+  const end = candidate.lastIndexOf('}');
+  if (start === -1 || end === -1 || end < start) return null;
+  try {
+    return JSON.parse(candidate.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
+async function runPiMemoryModel(ctx: LassoStatusContext, prompt: string, signal?: AbortSignal) {
+  const model = chooseModel(ctx);
+  if (!model || !ctx.modelRegistry) throw new Error('No Pi model available for lasso memory');
+  const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+  if (!auth.ok || !auth.apiKey) throw new Error(auth.error || `No auth for ${model.provider}/${model.id}`);
+
+  const response = await completeSimple(
+    model,
+    {
+      messages: [
+        {
+          content: [{ text: prompt, type: 'text' }],
+          role: 'user',
+          timestamp: Date.now(),
+        },
+      ],
+    },
+    { apiKey: auth.apiKey, headers: auth.headers, maxTokens: 4096, signal: signal ?? ctx.signal },
+  );
+
+  const rawText = extractRawText(response);
+  return { parsed: extractJsonObject(rawText), rawText };
+}
+
+async function persistMemoryObservation(ctx: LassoStatusContext, conversation: string) {
+  const result = await runPiMemoryModel(ctx, buildMemoryObserverPrompt(conversation));
+  const summary = typeof result.parsed?.summary === 'string' ? result.parsed.summary : result.rawText;
+  if (summary.trim()) await runLasso(['memory', 'observe'], { input: summary.trim() });
+}
+
+async function observeWithLasso(ctx: LassoStatusContext) {
   const conversation = serializePiConversation(ctx).trim();
   if (!conversation) {
     updateLassoStatus(ctx);
@@ -104,10 +181,12 @@ function observeWithLasso(ctx: LassoStatusContext) {
   }
 
   ctx.ui.setStatus('lasso', '[lasso: observing...]');
-  void Promise.all([
-    runLasso(['lint', 'scan'], { input: conversation }),
-    runLasso(['memory', 'observe'], { input: conversation }),
-  ]).then(() => updateLassoStatus(ctx));
+  void Promise.all([runLasso(['lint', 'scan'], { input: conversation }), persistMemoryObservation(ctx, conversation)])
+    .then(() => updateLassoStatus(ctx))
+    .catch((error) => {
+      ctx.ui.notify(`lasso observation failed: ${error instanceof Error ? error.message : String(error)}`, 'warning');
+      updateLassoStatus(ctx);
+    });
 }
 
 function parseLassoCommand(args: string) {
@@ -152,19 +231,23 @@ export default function (pi: ExtensionAPI) {
 
   pi.on('session_before_compact', async (event, ctx) => {
     ctx.ui.setStatus('lasso', '[lasso: reflecting...]');
-    const reflectionInput = buildCompactionReflection(event);
-    const result = await runLasso(['memory', 'reflect', '--emit-content'], { input: reflectionInput });
-    ctx.ui.setStatus('lasso', undefined);
+    try {
+      const result = await runPiMemoryModel(ctx, buildMemoryReflectorPrompt(event), event.signal);
+      const summary = typeof result.parsed?.threadSummary === 'string' ? result.parsed.threadSummary : result.rawText;
+      if (!summary.trim()) return;
 
-    if (result.exitCode !== 0 || !result.stdout.trim()) return;
+      await runLasso(['memory', 'reflect'], { input: summary.trim() });
 
-    return {
-      compaction: {
-        firstKeptEntryId: event.preparation.firstKeptEntryId,
-        summary: result.stdout.trim(),
-        tokensBefore: event.preparation.tokensBefore,
-      },
-    };
+      return {
+        compaction: {
+          firstKeptEntryId: event.preparation.firstKeptEntryId,
+          summary: summary.trim(),
+          tokensBefore: event.preparation.tokensBefore,
+        },
+      };
+    } finally {
+      ctx.ui.setStatus('lasso', undefined);
+    }
   });
 
   pi.registerCommand('lasso', {

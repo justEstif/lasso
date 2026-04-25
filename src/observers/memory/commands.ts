@@ -20,7 +20,6 @@ interface MemoryObserveOptions {
 
 interface MemoryReflectOptions {
   content?: string;
-  emitContent?: boolean;
   input?: string;
   limit?: string;
 }
@@ -54,16 +53,10 @@ export async function handleMemoryReflect(db: Database, options: MemoryReflectOp
   const sourceSnapshotIds = listSnapshots(db, Number(options.limit ?? 20)).map(
     (snapshot) => snapshot.id,
   );
-  const reflectionContent = content.trim();
   const reflection = createReflection(db, {
-    consolidatedContent: reflectionContent,
+    consolidatedContent: content.trim(),
     sourceSnapshotIds,
   });
-
-  if (options.emitContent) {
-    console.log(reflectionContent);
-    return;
-  }
 
   console.log(
     `Memory reflection ${reflection.id} created from ${sourceSnapshotIds.length} snapshots.`,
