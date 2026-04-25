@@ -14,8 +14,9 @@ describe('project setup', () => {
     const second = await initProject(cwd, { detectorCommand: 'changed', harness: 'pi' });
     const config = await Bun.file(path.join(cwd, '.lasso', 'config.json')).json();
 
-    expect(first.created).toHaveLength(2);
+    expect(first.created).toHaveLength(3);
     expect(second.skipped).toHaveLength(2);
+    expect(await Bun.file(path.join(cwd, '.gitignore')).text()).toContain('.lasso/db.sqlite*');
     expect(config.harness.type).toBe('pi');
     expect(config.observers.lint.detectorCommand).toBe('detector');
     expect(describeObserver('lint')).toBe(

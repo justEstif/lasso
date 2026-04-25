@@ -49,9 +49,17 @@ function describeConfiguredObservers(value = 'lint,memory') {
     .map((observer) => observer.trim())
     .filter(
       (observer): observer is 'lint' | 'memory' => observer === 'lint' || observer === 'memory',
-    )
-    .map((observer) => describeObserver(observer))
-    .join(', ');
+    );
+}
+
+function handleDoctor(db: Database, config: Awaited<ReturnType<typeof loadConfig>>) {
+  const { lassoDir } = resolveLassoPaths();
+  console.log('lasso doctor');
+  console.log(`- Config: ${config ? 'ok' : 'missing'}`);
+  console.log(`- Database: ${db ? 'ok' : 'unavailable'}`);
+  console.log(`- Lasso path: ${lassoDir}`);
+  console.log(`- Harness: ${config.harness.type}`);
+  console.log('- Pi extension: run setup if .pi/extensions/lasso.ts is missing');
 }
 
 function handleGlobalStatus(db: Database, config: Awaited<ReturnType<typeof loadConfig>>) {
@@ -65,18 +73,40 @@ async function handleSetup(opts: {
   force?: boolean;
   harness?: 'pi';
   observers?: string;
+  yes?: boolean;
 }) {
   const { projectRoot } = resolveLassoPaths();
   const result = await initProject(projectRoot, opts);
-  console.log('Set up lasso project.');
-  console.log(`Harness: ${opts.harness ?? 'pi'} (Pi coding agent integration)`);
-  console.log(`Observers: ${describeConfiguredObservers(opts.observers)}`);
-  for (const file of result.created) console.log(`Created: ${file}`);
-  for (const file of result.skipped) console.log(`Skipped existing: ${file}`);
-  console.log('\nNext steps:');
-  console.log('- Run: lasso status');
-  console.log('- Run: lasso tui');
-  if ((opts.harness ?? 'pi') === 'pi') console.log('- In Pi, run: /reload');
+  printSetupSummary(opts, result);
+}
+
+function printEnabledObservers(observers?: string) {
+  console.log('\nEnabled observers:');
+  for (const observer of describeConfiguredObservers(observers)) {
+    console.log(`  ${describeObserver(observer)}`);
+  }
+}
+
+function printSetupSection(title: string, files: string[]) {
+  if (files.length === 0) return;
+  console.log(`\n${title}:`);
+  for (const file of files) console.log(`  ${file}`);
+}
+
+function printSetupSummary(
+  opts: { harness?: 'pi'; observers?: string },
+  result: Awaited<ReturnType<typeof initProject>>,
+) {
+  console.log('lasso is ready.');
+  printSetupSection('Created', result.created);
+  printSetupSection('Skipped existing', result.skipped);
+  printEnabledObservers(opts.observers);
+  console.log('\nNext:');
+  console.log(
+    (opts.harness ?? 'pi') === 'pi'
+      ? '  Restart Pi or run /reload, then try /lasso status'
+      : '  Run lasso status',
+  );
 }
 
 function registerGlobalCommands(
@@ -98,6 +128,7 @@ function registerGlobalCommands(
       '--detector-command <command>',
       'Lint detector command (analyzes conversation history and emits lint JSON)',
     )
+    .option('--advanced', 'Show advanced setup options in help output')
     .option('--force', 'Overwrite existing lasso files')
     .option('--harness <harness>', 'Harness adapter to install (pi)', 'pi')
     .option(
@@ -105,7 +136,13 @@ function registerGlobalCommands(
       'Observers to enable: lint,memory (lint detects recurring corrections; memory stores useful context)',
       'lint,memory',
     )
+    .option('--yes', 'Use default setup choices without prompting')
     .action((opts) => handleSetup(opts));
+
+  program
+    .command('doctor')
+    .description('Check lasso project setup')
+    .action(() => handleDoctor(db, config));
 
   registerStatusAndTuiCommands(program, db, config);
   registerObserverToggleCommands(program);

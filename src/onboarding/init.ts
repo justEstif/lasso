@@ -4,10 +4,12 @@ import path from 'node:path';
 import { defaultConfig } from '../config/load.ts';
 
 export interface InitOptions {
+  advanced?: boolean;
   detectorCommand?: string;
   force?: boolean;
   harness?: 'pi';
   observers?: string;
+  yes?: boolean;
 }
 
 export interface InitResult {
@@ -34,6 +36,7 @@ export async function initProject(cwd: string, options: InitOptions): Promise<In
 
   await writeConfig(cwd, options, result);
   if (shouldInstallPiAdapter(options)) await writePiExtension(cwd, options, result);
+  await writeGitignore(cwd, result);
 
   return result;
 }
@@ -84,6 +87,20 @@ async function writeConfig(cwd: string, options: InitOptions, result: InitResult
     options,
     result,
   );
+}
+
+async function writeGitignore(cwd: string, result: InitResult) {
+  const gitignorePath = path.join(cwd, '.gitignore');
+  const entries = ['.lasso/db.sqlite*', '.lasso/debug/'];
+  const existing = (await Bun.file(gitignorePath).exists())
+    ? await Bun.file(gitignorePath).text()
+    : '';
+  const missing = entries.filter((entry) => !existing.split(/\r?\n/).includes(entry));
+  if (missing.length === 0) return;
+
+  const prefix = existing.length > 0 && !existing.endsWith('\n') ? '\n' : '';
+  await Bun.write(gitignorePath, `${existing}${prefix}${missing.join('\n')}\n`);
+  result.created.push(gitignorePath);
 }
 
 async function writeIfAllowed(

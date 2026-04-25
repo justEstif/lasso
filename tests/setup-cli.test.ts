@@ -72,7 +72,9 @@ function expectGeneratedPiExtension(extension: string) {
 }
 
 function expectSetupOutput(stdout: string) {
-  expect(stdout).toContain('Set up lasso project');
-  expect(stdout).toContain('Harness: pi (Pi coding agent integration)');
+  expect(stdout).toContain('lasso is ready.');
+  expect(stdout).toContain('Created:');
+  expect(stdout).toContain('Enabled observers:');
   expect(stdout).toContain('lint (detects recurring corrections');
+  expect(stdout).toContain('Restart Pi or run /reload, then try /lasso status');
 }
