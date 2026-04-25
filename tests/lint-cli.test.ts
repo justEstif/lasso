@@ -61,6 +61,7 @@ describe('lint CLI detector output integration', () => {
       'conversation.txt',
       '--detector-output',
       'detector.json',
+      '--force',
     ]);
     const list = await runLasso(cwd, ['lint', 'list']);
     const shortId = extractShortId(list.stdout);
@@ -79,6 +80,38 @@ describe('lint CLI detector output integration', () => {
   });
 });
 
+describe('lint CLI threshold integration', () => {
+  test('scan skips detector output below token threshold until forced', async () => {
+    const cwd = path.join(projectRoot, 'tests', '.tmp_lint_cli_threshold');
+    await rm(cwd, { force: true, recursive: true });
+    await mkdir(cwd, { recursive: true });
+    await Bun.write(path.join(cwd, 'detector.json'), detectorOutput());
+
+    const skipped = await runLasso(cwd, [
+      'lint',
+      'scan',
+      '--detector-output',
+      'detector.json',
+      '--tokens',
+      '10',
+    ]);
+    const forced = await runLasso(cwd, [
+      'lint',
+      'scan',
+      '--detector-output',
+      'detector.json',
+      '--tokens',
+      '10',
+      '--force',
+    ]);
+
+    expect(skipped.stdout).toContain('"skipped":true');
+    expect(forced.stdout).toContain('1 created');
+
+    await rm(cwd, { force: true, recursive: true });
+  });
+});
+
 describe('lint CLI stdin integration', () => {
   test('scan reads conversation from stdin by default', async () => {
     const cwd = path.join(projectRoot, 'tests', '.tmp_lint_cli_stdin');
@@ -88,7 +121,7 @@ describe('lint CLI stdin integration', () => {
 
     const scan = await runLasso(
       cwd,
-      ['lint', 'scan', '--detector-output', 'detector.json'],
+      ['lint', 'scan', '--detector-output', 'detector.json', '--force'],
       'User: stop using antd here',
     );
     const list = await runLasso(cwd, ['lint', 'list']);
@@ -113,6 +146,7 @@ describe('lint CLI detector command integration', () => {
       'scan',
       '--detector-command',
       'bun emit-detector.js',
+      '--force',
     ]);
     const list = await runLasso(cwd, ['lint', 'list']);
 

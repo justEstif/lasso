@@ -6,15 +6,18 @@ import type { LintStatus } from './db';
 
 import {
   getEntry,
+  getLintObservationState,
   getRecurrences,
   listActiveEntries,
   listEntries,
+  recordLintObservationTokenCount,
   recordScanRun,
   resolveEntryId,
   updateEntryStatus,
 } from './db';
 import { applyDetectorResult, parseDetectorResult } from './detector.ts';
-import { checkSaturation, checkTokenBudget } from '../service.ts';
+import { checkSaturation, checkTokenBudget, runObserverLifecycle } from '../service.ts';
+import { estimateTokens } from '../memory/tokens.ts';
 import { buildLintDetectorPrompt } from './prompt.ts';
 import { runDetector } from './runner.ts';
 import { buildLintStatusModel } from './status.ts';
@@ -22,8 +25,10 @@ import { buildLintStatusModel } from './status.ts';
 interface LintScanOptions {
   detectorCommand?: string;
   detectorOutput?: string;
+  force?: boolean;
   input?: string;
   printPrompt?: boolean;
+  tokens?: string;
 }
 
 export interface LintScanGateResult {
@@ -34,6 +39,7 @@ export interface LintScanGateResult {
 export function checkShouldScanLint(
   activeCount: number,
   currentTokens: number,
+  lastObservedTokens: number,
   config: LassoConfig,
 ): LintScanGateResult {
   const lintConfig = config.observers.lint;
@@ -42,7 +48,7 @@ export function checkShouldScanLint(
     saturation: checkSaturation({ activeCount, limit: lintConfig.throttleLimit }),
     tokenBudget: checkTokenBudget({
       currentTokens,
-      lastObservedTokens: 0,
+      lastObservedTokens,
       thresholdTokens: lintConfig.scanThresholdTokens,
     }),
   };
@@ -51,6 +57,14 @@ export function checkShouldScanLint(
 export async function handleLintScan(db: Database, options: LintScanOptions, config: LassoConfig) {
   const conversation = await readConversation(options);
   const activeEntries = listActiveEntries(db, 50);
+  const observedTokens = options.tokens ? Number(options.tokens) : estimateTokens(conversation);
+  const gates = checkShouldScanLint(
+    activeEntries.length,
+    observedTokens,
+    getLintObservationState(db),
+    config,
+  );
+
   const prompt = buildLintDetectorPrompt(conversation, activeEntries);
 
   if (options.printPrompt) {
@@ -58,13 +72,28 @@ export async function handleLintScan(db: Database, options: LintScanOptions, con
     return;
   }
 
-  const detectorOutput = await readDetectorOutput(prompt, options, config);
+  const observation = await runObserverLifecycle({
+    force: options.force,
+    gates,
+    observe: async () => applyLintDetector(db, await readDetectorOutput(prompt, options, config)),
+    persistProgress: (tokens) => recordLintObservationTokenCount(db, tokens),
+  });
+
+  if (observation.skipped) {
+    console.log(JSON.stringify({ ...observation.gates.tokenBudget, skipped: true }));
+    return;
+  }
+
+  console.log(
+    `Lint scan complete: ${observation.result.created} created, ${observation.result.recurrences} recurrences, ${observation.result.skipped} skipped.`,
+  );
+}
+
+function applyLintDetector(db: Database, detectorOutput: string) {
   const result = parseDetectorResult(detectorOutput);
   const summary = applyDetectorResult(db, result);
   recordScanRun(db, summary);
-  console.log(
-    `Lint scan complete: ${summary.created} created, ${summary.recurrences} recurrences, ${summary.skipped} skipped.`,
-  );
+  return summary;
 }
 
 async function readConversation(options: LintScanOptions) {

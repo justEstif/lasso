@@ -1,11 +1,11 @@
 ---
 # lasso-1z4p
 title: Extract shared observer service architecture
-status: in-progress
+status: completed
 type: epic
 priority: normal
 created_at: 2026-04-25T15:58:44Z
-updated_at: 2026-04-25T21:07:57Z
+updated_at: 2026-04-25T21:16:47Z
 blocking:
     - lasso-3tgk
 blocked_by:
@@ -56,5 +56,11 @@ Started the shared observer architecture by extracting common token-budget and s
 
 ## Remaining Follow-up
 
-- [ ] Extract full observe/persist/reflect lifecycle after current callers converge on shared gates
-- [ ] Port lint scanner execution to enforce scan thresholds once lint token state persistence exists
+- [x] Extract full observe/persist/reflect lifecycle after current callers converge on shared gates
+- [x] Port lint scanner execution to enforce scan thresholds once lint token state persistence exists
+
+## Final Completion Summary
+
+Completed the epic by adding a shared observer lifecycle runner that gates observations, runs observer-specific work, and persists progress only after non-skipped observations. Added lint observation token state persistence and wired `lint scan` to enforce `scanThresholdTokens` unless `--force` is provided. Added a Drizzle migration for lint observation state and expanded tests for lifecycle behavior, lint threshold skipping, and migration count.
+
+Validation passed: `bun run format`, `bun run lint`, `bun test` (76 passing), and `bunx tsc --noEmit`.

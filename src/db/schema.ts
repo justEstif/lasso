@@ -28,6 +28,12 @@ export const lintScanRuns = sqliteTable('lint_scan_runs', {
   skipped_count: integer('skipped_count').notNull(),
 });
 
+export const lintObservationState = sqliteTable('lint_observation_state', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  last_observed_tokens: integer('last_observed_tokens').notNull().default(0),
+  updated_at: text('updated_at').notNull(),
+});
+
 export const observationEntries = sqliteTable('observation_entries', {
   category: text('category').notNull(),
   content: text('content').notNull(),

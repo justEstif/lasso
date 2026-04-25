@@ -1,3 +1,26 @@
+export interface ObserverLifecycleGates {
+  saturation?: SaturationGateResult;
+  tokenBudget: TokenBudgetGateResult;
+}
+
+export interface ObserverLifecycleInput<T> {
+  force?: boolean;
+  gates: ObserverLifecycleGates;
+  observe: () => Promise<T> | T;
+  persistProgress?: (observedTokens: number) => Promise<void> | void;
+}
+
+export type ObserverLifecycleResult<T> =
+  | {
+      gates: ObserverLifecycleGates;
+      result: T;
+      skipped: false;
+    }
+  | {
+      gates: ObserverLifecycleGates;
+      skipped: true;
+    };
+
 export interface SaturationGateInput {
   activeCount: number;
   limit: number;
@@ -59,4 +82,24 @@ export function checkTokenBudget(input: TokenBudgetGateInput): TokenBudgetGateRe
     threshold,
     unobserved,
   };
+}
+
+/**
+ * Runs the shared observer lifecycle: gate, observe, then persist progress.
+ *
+ * Observer-specific code supplies the expensive observation work and the persistence
+ * callback; this function owns the cross-observer rule that skipped observations do
+ * not call the model or advance the token cursor.
+ */
+export async function runObserverLifecycle<T>(
+  input: ObserverLifecycleInput<T>,
+): Promise<ObserverLifecycleResult<T>> {
+  if (!input.force && !input.gates.tokenBudget.needed) {
+    return { gates: input.gates, skipped: true };
+  }
+
+  const result = await input.observe();
+  await input.persistProgress?.(input.gates.tokenBudget.currentTokens);
+
+  return { gates: input.gates, result, skipped: false };
 }

@@ -167,6 +167,8 @@ function registerLintCommands(
     .command('scan')
     .description('Force a detector run for the lint observer')
     .option('--input <path>', 'Conversation transcript file')
+    .option('--tokens <count>', 'Estimated token count of the observed conversation')
+    .option('--force', 'Run detector even when the scan threshold is not met')
     .option('--detector-output <path>', 'Detector JSON output file')
     .option(
       '--detector-command <command>',

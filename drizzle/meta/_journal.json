@@ -29,6 +29,13 @@
       "when": 1777149656895,
       "tag": "0003_robust_star_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1777151643238,
+      "tag": "0004_smart_starbolt",
+      "breakpoints": true
     }
   ]
 }

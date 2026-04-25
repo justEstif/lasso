@@ -4,7 +4,12 @@ import { desc, eq, inArray, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/bun-sqlite';
 import { randomUUID } from 'node:crypto';
 
-import { lintEntries, lintRecurrences, lintScanRuns } from '../../db/schema.ts';
+import {
+  lintEntries,
+  lintObservationState,
+  lintRecurrences,
+  lintScanRuns,
+} from '../../db/schema.ts';
 
 export type LintStatus = 'proposed' | 'accepted' | 'rejected' | 'deferred' | 'implemented';
 
@@ -69,6 +74,11 @@ export function getLastScanRun(db: Database): LintScanRun | null {
   return (prepared.get() as LintScanRun | undefined) ?? null;
 }
 
+export function getLintObservationState(db: Database): number {
+  const row = drizzle(db).select().from(lintObservationState).limit(1).get();
+  return row?.last_observed_tokens ?? 0;
+}
+
 export function getRecurrences(db: Database, entryId: string): LintRecurrence[] {
   const prepared = drizzle(db)
     .select()
@@ -102,6 +112,26 @@ export function listEntries(db: Database, status?: LintStatus): LintEntry[] {
     .prepare();
 
   return prepared.all() as LintEntry[];
+}
+
+export function recordLintObservationTokenCount(db: Database, observedTokens: number): void {
+  const orm = drizzle(db);
+  const now = new Date().toISOString();
+  const existing = orm.select().from(lintObservationState).limit(1).get();
+
+  if (existing) {
+    orm
+      .update(lintObservationState)
+      .set({ last_observed_tokens: observedTokens, updated_at: now })
+      .where(eq(lintObservationState.id, existing.id))
+      .run();
+    return;
+  }
+
+  orm
+    .insert(lintObservationState)
+    .values({ last_observed_tokens: observedTokens, updated_at: now })
+    .run();
 }
 
 export function recordScanRun(

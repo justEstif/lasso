@@ -2,7 +2,11 @@ import { describe, expect, test } from 'bun:test';
 
 import { defaultConfig } from '../src/config/load.ts';
 import { checkShouldScanLint } from '../src/observers/lint/commands.ts';
-import { checkSaturation, checkTokenBudget } from '../src/observers/service.ts';
+import {
+  checkSaturation,
+  checkTokenBudget,
+  runObserverLifecycle,
+} from '../src/observers/service.ts';
 
 describe('shared observer token budget gate', () => {
   test('checks token-budget thresholds consistently', () => {
@@ -39,6 +43,58 @@ describe('shared observer token budget gate', () => {
   });
 });
 
+describe('shared observer skipped lifecycle', () => {
+  test('skips observation without advancing progress when token gate is closed', async () => {
+    let observed = false;
+    let persisted = 0;
+
+    const result = await runObserverLifecycle({
+      gates: {
+        tokenBudget: checkTokenBudget({
+          currentTokens: 5000,
+          lastObservedTokens: 4000,
+          thresholdTokens: 10_000,
+        }),
+      },
+      observe: () => {
+        observed = true;
+        return 'observed';
+      },
+      persistProgress: () => {
+        persisted++;
+      },
+    });
+
+    expect(result.skipped).toBe(true);
+    expect(observed).toBe(false);
+    expect(persisted).toBe(0);
+  });
+});
+
+describe('shared observer active lifecycle', () => {
+  test('runs observation and persists progress when token gate is open', async () => {
+    let persistedTokens = 0;
+
+    const result = await runObserverLifecycle({
+      gates: {
+        tokenBudget: checkTokenBudget({
+          currentTokens: 15_000,
+          lastObservedTokens: 4000,
+          thresholdTokens: 10_000,
+        }),
+      },
+      observe: () => 'observed',
+      persistProgress: (tokens) => {
+        persistedTokens = tokens;
+      },
+    });
+
+    expect(result.skipped).toBe(false);
+    expect(result.skipped ? undefined : result.result).toBe('observed');
+    expect(persistedTokens).toBe(15_000);
+  });
+});
+
 describe('shared observer saturation gate', () => {
   test('checks saturation at the shared observer boundary', () => {
     expect(checkSaturation({ activeCount: 14, limit: 15 })).toEqual({
@@ -51,7 +107,7 @@ describe('shared observer saturation gate', () => {
   });
 
   test('exposes lint scan gating through the shared primitives', () => {
-    const result = checkShouldScanLint(15, 5000, defaultConfig);
+    const result = checkShouldScanLint(15, 5000, 0, defaultConfig);
 
     expect(result.saturation.saturated).toBe(true);
     expect(result.tokenBudget.needed).toBe(true);
