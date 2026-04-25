@@ -167,10 +167,10 @@ async function runPiMemoryModel(ctx: LassoStatusContext, prompt: string, signal?
   return { parsed: extractJsonObject(rawText), rawText };
 }
 
-async function persistMemoryObservation(ctx: LassoStatusContext, conversation: string) {
+async function persistMemoryObservation(ctx: LassoStatusContext, conversation: string, tokens: number) {
   const result = await runPiMemoryModel(ctx, buildMemoryObserverPrompt(conversation));
   const summary = typeof result.parsed?.summary === 'string' ? result.parsed.summary : result.rawText;
-  if (summary.trim()) await runLasso(['memory', 'observe'], { input: summary.trim() });
+  if (summary.trim()) await runLasso(['memory', 'observe', '--tokens', String(tokens)], { input: summary.trim() });
 }
 
 async function observeWithLasso(ctx: LassoStatusContext) {
@@ -180,8 +180,20 @@ async function observeWithLasso(ctx: LassoStatusContext) {
     return;
   }
 
+  // Estimate tokens and check threshold before invoking the LLM observer
+  const estimatedTokens = Math.ceil(conversation.length / 4);
+  const check = await runLasso(['memory', 'should-observe', '--tokens', String(estimatedTokens)]);
+  if (check.exitCode !== 0) {
+    // Below threshold, skip observation
+    updateLassoStatus(ctx);
+    return;
+  }
+
   ctx.ui.setStatus('lasso', '[lasso: observing...]');
-  void Promise.all([runLasso(['lint', 'scan'], { input: conversation }), persistMemoryObservation(ctx, conversation)])
+  void Promise.all([
+    runLasso(['lint', 'scan'], { input: conversation }),
+    persistMemoryObservation(ctx, conversation, estimatedTokens),
+  ])
     .then(() => updateLassoStatus(ctx))
     .catch((error) => {
       ctx.ui.notify(`lasso observation failed: ${error instanceof Error ? error.message : String(error)}`, 'warning');
@@ -286,7 +298,8 @@ export default function (pi: ExtensionAPI) {
     description: 'Run lasso memory observe on the current Pi conversation',
     handler: async (_args, ctx) => {
       const conversation = serializePiConversation(ctx);
-      const result = await runLasso(['memory', 'observe'], { input: conversation });
+      const tokens = Math.ceil(conversation.length / 4);
+      const result = await runLasso(['memory', 'observe', '--tokens', String(tokens)], { input: conversation });
       ctx.ui.notify((result.stdout || result.stderr).trim(), result.exitCode === 0 ? 'info' : 'error');
       updateLassoStatus(ctx);
     },

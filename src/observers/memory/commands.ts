@@ -7,22 +7,42 @@ import {
   countSnapshots,
   createReflection,
   createSnapshot,
+  getObservationState,
   listReflections,
   listSnapshots,
   parseSourceSnapshotIds,
+  recordObservationTokenCount,
   searchSnapshots,
 } from './db.ts';
 import { tokenSimilarity } from './fingerprint.ts';
+import { estimateTokens } from './tokens.ts';
 
-interface MemoryObserveOptions {
-  content?: string;
-  input?: string;
-  scope?: 'resource' | 'thread';
+export interface ShouldObserveResult {
+  currentTokens: number;
+  lastObserved: number;
+  needed: boolean;
+  threshold: number;
+  unobserved: number;
+}
+
+export interface ShouldObserveResult {
+  currentTokens: number;
+  lastObserved: number;
+  needed: boolean;
+  threshold: number;
+  unobserved: number;
 }
 
 interface MemoryContextOptions {
   limit?: string;
   query?: string;
+}
+
+interface MemoryObserveOptions {
+  content?: string;
+  input?: string;
+  scope?: 'resource' | 'thread';
+  tokens?: string;
 }
 
 interface MemoryReflectOptions {
@@ -31,54 +51,18 @@ interface MemoryReflectOptions {
   limit?: string;
 }
 
-export async function handleMemoryObserve(
+export function checkShouldObserve(
   db: Database,
-  options: MemoryObserveOptions,
+  currentTokens: number,
   config: LassoConfig,
-) {
-  const content = await readMemoryContent(options);
-  if (content.trim().length === 0) {
-    console.error('memory observe needs --content <text>, --input <path>, or stdin content.');
-    process.exit(1);
-  }
+): ShouldObserveResult {
+  const scope = config.observers.memory.scope;
+  const threshold = config.observers.memory.observationThreshold;
+  const lastObserved = getObservationState(db, scope);
+  const unobserved = currentTokens - lastObserved;
+  const needed = unobserved >= threshold;
 
-  const snapshot = createSnapshot(db, {
-    content: content.trim(),
-    scope: options.scope ?? config.observers.memory.scope,
-  });
-
-  console.log(`Memory snapshot ${snapshot.id} created (${snapshot.scope}).`);
-}
-
-export async function handleMemoryReflect(db: Database, options: MemoryReflectOptions) {
-  const content = await readMemoryContent(options);
-  if (content.trim().length === 0) {
-    console.error('memory reflect needs --content <text>, --input <path>, or stdin content.');
-    process.exit(1);
-  }
-
-  const sourceSnapshotIds = listSnapshots(db, Number(options.limit ?? 20)).map(
-    (snapshot) => snapshot.id,
-  );
-  const reflection = createReflection(db, {
-    consolidatedContent: content.trim(),
-    sourceSnapshotIds,
-  });
-
-  console.log(
-    `Memory reflection ${reflection.id} created from ${sourceSnapshotIds.length} snapshots.`,
-  );
-}
-
-export function handleMemoryStatus(db: Database) {
-  const snapshots = listSnapshots(db, 1);
-  const reflections = listReflections(db, 1);
-
-  console.log('Memory Observer Status:');
-  console.log(`- Snapshots: ${countSnapshots(db)}`);
-  console.log(`- Reflections: ${countReflections(db)}`);
-  console.log(`Last snapshot: ${snapshots[0]?.created_at ?? 'never'}`);
-  console.log(`Last reflection: ${reflections[0]?.created_at ?? 'never'}`);
+  return { currentTokens, lastObserved, needed, threshold, unobserved };
 }
 
 export function handleMemoryContext(db: Database, options: MemoryContextOptions) {
@@ -115,6 +99,68 @@ export function handleMemoryExport(db: Database) {
     console.log(`**Seen:** ${snapshot.seen_count ?? 1}\n`);
     console.log(`${snapshot.content}\n`);
   }
+}
+
+export async function handleMemoryObserve(
+  db: Database,
+  options: MemoryObserveOptions,
+  config: LassoConfig,
+) {
+  const content = await readMemoryContent(options);
+  if (content.trim().length === 0) {
+    console.error('memory observe needs --content <text>, --input <path>, or stdin content.');
+    process.exit(1);
+  }
+
+  const scope = options.scope ?? config.observers.memory.scope;
+  const snapshot = createSnapshot(db, { content: content.trim(), scope });
+
+  // Record token count so should-observe can track unobserved tokens
+  const observedTokens = options.tokens ? Number(options.tokens) : estimateTokens(content);
+  recordObservationTokenCount(db, scope, observedTokens);
+
+  console.log(`Memory snapshot ${snapshot.id} created (${snapshot.scope}).`);
+}
+
+export async function handleMemoryReflect(db: Database, options: MemoryReflectOptions) {
+  const content = await readMemoryContent(options);
+  if (content.trim().length === 0) {
+    console.error('memory reflect needs --content <text>, --input <path>, or stdin content.');
+    process.exit(1);
+  }
+
+  const sourceSnapshotIds = listSnapshots(db, Number(options.limit ?? 20)).map(
+    (snapshot) => snapshot.id,
+  );
+  const reflection = createReflection(db, {
+    consolidatedContent: content.trim(),
+    sourceSnapshotIds,
+  });
+
+  console.log(
+    `Memory reflection ${reflection.id} created from ${sourceSnapshotIds.length} snapshots.`,
+  );
+}
+
+export function handleMemoryShouldObserve(
+  db: Database,
+  currentTokens: number,
+  config: LassoConfig,
+) {
+  const result = checkShouldObserve(db, currentTokens, config);
+  console.log(JSON.stringify(result));
+  process.exit(result.needed ? 0 : 1);
+}
+
+export function handleMemoryStatus(db: Database) {
+  const snapshots = listSnapshots(db, 1);
+  const reflections = listReflections(db, 1);
+
+  console.log('Memory Observer Status:');
+  console.log(`- Snapshots: ${countSnapshots(db)}`);
+  console.log(`- Reflections: ${countReflections(db)}`);
+  console.log(`Last snapshot: ${snapshots[0]?.created_at ?? 'never'}`);
+  console.log(`Last reflection: ${reflections[0]?.created_at ?? 'never'}`);
 }
 
 function distinctSnapshots(snapshots: ReturnType<typeof listSnapshots>) {

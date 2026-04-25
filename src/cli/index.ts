@@ -18,6 +18,7 @@ import {
   handleMemoryExport,
   handleMemoryObserve,
   handleMemoryReflect,
+  handleMemoryShouldObserve,
   handleMemoryStatus,
 } from '../observers/memory/commands.ts';
 import { describeObserver, initProject } from '../onboarding/init.ts';
@@ -222,6 +223,7 @@ function registerMemoryCommands(
     .option('--content <text>', 'Observation content')
     .option('--input <path>', 'Observation content file')
     .option('--scope <scope>', 'Memory scope: thread or resource')
+    .option('--tokens <count>', 'Estimated token count of the observed conversation')
     .action((opts) => handleMemoryObserve(db, opts, config));
   memoryCmd
     .command('reflect')
@@ -236,10 +238,23 @@ function registerMemoryCommands(
     .option('--query <text>', 'Query used to rank relevant memory')
     .option('--limit <count>', 'Maximum number of memory items', '5')
     .action((opts) => handleMemoryContext(db, opts));
+  registerMemoryObserveCheck(memoryCmd, db, config);
   memoryCmd
     .command('export')
     .description('Export memory snapshots and reflections to markdown')
     .action(() => handleMemoryExport(db));
+}
+
+function registerMemoryObserveCheck(
+  memoryCmd: Command,
+  db: Database,
+  config: Awaited<ReturnType<typeof loadConfig>>,
+) {
+  memoryCmd
+    .command('should-observe')
+    .description('Check if memory observation is needed based on token budget')
+    .requiredOption('--tokens <count>', 'Current estimated token count of the conversation')
+    .action((opts) => handleMemoryShouldObserve(db, Number(opts.tokens), config));
 }
 
 function registerObserverToggleCommands(program: Command) {

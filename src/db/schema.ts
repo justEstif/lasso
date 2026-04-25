@@ -46,3 +46,10 @@ export const memoryReflections = sqliteTable('memory_reflections', {
   id: text('id').primaryKey(),
   source_snapshot_ids: text('source_snapshot_ids').notNull(),
 });
+
+export const memoryObservationState = sqliteTable('memory_observation_state', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  last_observed_tokens: integer('last_observed_tokens').notNull().default(0),
+  scope: text('scope').notNull(),
+  updated_at: text('updated_at').notNull(),
+});

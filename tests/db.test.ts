@@ -66,7 +66,7 @@ describe('Database migration journal', () => {
       string,
       unknown
     >[];
-    expect(migrations.length).toBe(2);
+    expect(migrations.length).toBe(1);
     expect(migrations[0]?.hash).toBeString();
   });
 
@@ -78,13 +78,13 @@ describe('Database migration journal', () => {
       string,
       unknown
     >[];
-    expect(migrations.length).toBe(2);
+    expect(migrations.length).toBe(1);
 
     runMigrations(db);
     migrations = db.prepare('SELECT * FROM __drizzle_migrations').all() as Record<
       string,
       unknown
     >[];
-    expect(migrations.length).toBe(2);
+    expect(migrations.length).toBe(1);
   });
 });

@@ -25,6 +25,13 @@ CREATE TABLE `lint_scan_runs` (
 	`skipped_count` integer NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE `memory_observation_state` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`last_observed_tokens` integer DEFAULT 0 NOT NULL,
+	`scope` text NOT NULL,
+	`updated_at` text NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE `memory_reflections` (
 	`consolidated_content` text NOT NULL,
 	`created_at` text NOT NULL,
@@ -35,6 +42,11 @@ CREATE TABLE `memory_reflections` (
 CREATE TABLE `memory_snapshots` (
 	`content` text NOT NULL,
 	`created_at` text NOT NULL,
+	`fingerprint` text,
 	`id` text PRIMARY KEY NOT NULL,
-	`scope` text NOT NULL
+	`last_seen_at` text,
+	`normalized_hash` text,
+	`scope` text NOT NULL,
+	`seen_count` integer DEFAULT 1 NOT NULL,
+	`superseded_by` text
 );

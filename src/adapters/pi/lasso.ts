@@ -13,18 +13,24 @@ export interface LassoCommandResult {
   stdout: string;
 }
 
+export type PiLassoCommand =
+  | 'lint-scan'
+  | 'lint-status'
+  | 'memory-observe'
+  | 'memory-should-observe'
+  | 'memory-status';
+
 export interface RunLassoOptions {
   cwd?: string;
   input?: string;
 }
-
-export type PiLassoCommand = 'lint-scan' | 'lint-status' | 'memory-observe' | 'memory-status';
 
 export function buildLassoArgs(command: PiLassoCommand) {
   const commands = {
     'lint-scan': ['lint', 'scan'],
     'lint-status': ['lint', 'status'],
     'memory-observe': ['memory', 'observe'],
+    'memory-should-observe': ['memory', 'should-observe'],
     'memory-status': ['memory', 'status'],
   } satisfies Record<PiLassoCommand, string[]>;
 

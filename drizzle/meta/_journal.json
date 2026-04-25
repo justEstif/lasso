@@ -5,15 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1777053976372,
+      "when": 1777130824454,
       "tag": "0000_initial_schema",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1777114602000,
-      "tag": "0001_memory_dedupe",
       "breakpoints": true
     }
   ]

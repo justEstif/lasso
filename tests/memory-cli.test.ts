@@ -21,8 +21,10 @@ function expectMemoryLifecycleOutput(results: {
   expect(results.exported.stdout).toContain('User prefers direct Bun APIs');
 }
 
-async function observeMemory(cwd: string, content: string) {
-  return runLasso(cwd, ['memory', 'observe', '--content', content]);
+async function observeMemory(cwd: string, content: string, tokens?: string) {
+  const args = ['memory', 'observe', '--content', content];
+  if (tokens) args.push('--tokens', tokens);
+  return runLasso(cwd, args);
 }
 
 async function prepareTempProject(name: string) {
@@ -96,6 +98,43 @@ describe('memory CLI integration', () => {
 
     expect(snapshotHeadings).toHaveLength(1);
     expect(exported.stdout).toContain('**Seen:** 2');
+
+    await rm(cwd, { force: true, recursive: true });
+  });
+});
+
+describe('memory should-observe', () => {
+  test('respects token budget threshold', async () => {
+    const cwd = await prepareTempProject('.tmp_memory_should_observe');
+
+    // Default threshold is 12,000 tokens — below threshold should exit 1 (skip)
+    const below = await runLasso(cwd, ['memory', 'should-observe', '--tokens', '5000']);
+    expect(below.exitCode).toBe(1);
+    const belowJson = JSON.parse(below.stdout);
+    expect(belowJson.needed).toBe(false);
+    expect(belowJson.unobserved).toBe(5000);
+
+    // At threshold should exit 0 (observe)
+    const atThreshold = await runLasso(cwd, ['memory', 'should-observe', '--tokens', '12000']);
+    expect(atThreshold.exitCode).toBe(0);
+    const atJson = JSON.parse(atThreshold.stdout);
+    expect(atJson.needed).toBe(true);
+
+    // After observing, the unobserved count resets
+    await observeMemory(
+      cwd,
+      'User prefers Bun APIs for all file operations.',
+      // Pass a high token count to simulate a full conversation
+      '12000',
+    );
+
+    // unobserved = currentTokens(5000) - lastObserved(12000) = negative, so not needed
+    const afterObserve = await runLasso(cwd, ['memory', 'should-observe', '--tokens', '5000']);
+    expect(afterObserve.exitCode).toBe(1);
+
+    // But 25,000 tokens should exceed threshold (unobserved = 25000 - 12000 = 13000 > 12000)
+    const exceedsThreshold = await runLasso(cwd, ['memory', 'should-observe', '--tokens', '25000']);
+    expect(exceedsThreshold.exitCode).toBe(0);
 
     await rm(cwd, { force: true, recursive: true });
   });

@@ -5,6 +5,10 @@ import sonarjs from 'eslint-plugin-sonarjs';
 import unicorn from 'eslint-plugin-unicorn';
 import tseslint from 'typescript-eslint';
 
+const cliCommandFiles = {
+  files: ['**/cli/**/*.ts', '**/observers/**/commands.ts'],
+};
+
 export default tseslint.config(
   js.configs.recommended,
   sonarjs.configs.recommended,
@@ -22,6 +26,12 @@ export default tseslint.config(
       'no-console': 'off',
       'unicorn/prevent-abbreviations': 'off',
       'unicorn/no-null': 'off',
+    },
+  },
+  {
+    ...cliCommandFiles,
+    rules: {
+      'unicorn/no-process-exit': 'off',
     },
   },
 );
