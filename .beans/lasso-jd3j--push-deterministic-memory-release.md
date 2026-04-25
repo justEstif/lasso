@@ -5,7 +5,7 @@ status: completed
 type: task
 priority: normal
 created_at: 2026-04-25T13:02:43Z
-updated_at: 2026-04-25T13:04:09Z
+updated_at: 2026-04-25T13:04:16Z
 ---
 
 Commit and push current changes to main, then create and push an npm release tag.
@@ -13,7 +13,7 @@ Commit and push current changes to main, then create and push an npm release tag
 - [x] Inspect git status and version
 - [x] Commit code and bean changes
 - [x] Push main
-- [ ] Create and push version tag
+- [x] Create and push version tag
 - [x] Summarize release push
 
 ## Notes
