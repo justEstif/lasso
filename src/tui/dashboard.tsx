@@ -4,13 +4,8 @@ import React, { useMemo, useState } from 'react';
 
 import type { LassoConfig } from '../config/load.ts';
 
-import { getLastScanRun, listEntries } from '../observers/lint/db.ts';
-import {
-  countReflections,
-  countSnapshots,
-  listReflections,
-  listSnapshots,
-} from '../observers/memory/db.ts';
+import { buildLintStatusModel } from '../observers/lint/status.ts';
+import { buildMemoryStatusModel } from '../observers/memory/status.ts';
 
 interface TuiOptions {
   once?: boolean;
@@ -54,31 +49,28 @@ export function renderDashboard(db: Database, config: LassoConfig) {
 }
 
 function buildDashboardModel(db: Database, config: LassoConfig): DashboardModel {
-  const entries = listEntries(db);
-  const counts = countLintStatuses(entries);
-  const snapshots = listSnapshots(db, 5);
-  const reflections = listReflections(db, 3);
-  const lastScan = getLastScanRun(db);
+  const lint = buildLintStatusModel(db, config);
+  const memory = buildMemoryStatusModel(db);
 
   return {
     lint: {
-      ...counts,
+      ...lint.counts,
       enabled: config.observers.lint.enabled,
-      lastScan: lastScan?.scanned_at ?? 'never',
-      recent: entries.slice(0, 5).map((entry) => {
+      lastScan: lint.lastScan?.scanned_at ?? 'never',
+      recent: lint.entries.slice(0, 5).map((entry) => {
         return `[${entry.id.slice(0, 8)}] ${entry.status}: ${entry.description}`;
       }),
-      throttleLimit: config.observers.lint.throttleLimit,
+      throttleLimit: lint.saturation.limit,
     },
     memory: {
       enabled: config.observers.memory.enabled,
-      lastReflection: reflections[0]?.created_at ?? 'never',
-      lastSnapshot: snapshots[0]?.created_at ?? 'never',
-      recentSnapshots: snapshots.map((snapshot) => {
+      lastReflection: memory.lastReflection,
+      lastSnapshot: memory.lastSnapshot,
+      recentSnapshots: memory.recentSnapshots.map((snapshot) => {
         return `[${snapshot.id.slice(0, 8)}] ${snapshot.scope}: ${truncate(snapshot.content, 72)}`;
       }),
-      reflections: countReflections(db),
-      snapshots: countSnapshots(db),
+      reflections: memory.reflections,
+      snapshots: memory.snapshots,
     },
     updatedAt: new Date().toLocaleString(),
   };
@@ -151,12 +143,6 @@ function Panel({ children, title }: React.PropsWithChildren<{ title: string }>) 
       {children}
     </Box>
   );
-}
-
-function countLintStatuses(entries: ReturnType<typeof listEntries>) {
-  const counts = { accepted: 0, deferred: 0, implemented: 0, proposed: 0, rejected: 0 };
-  for (const entry of entries) counts[entry.status]++;
-  return counts;
 }
 
 function truncate(value: string, length: number) {

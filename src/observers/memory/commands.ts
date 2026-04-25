@@ -1,13 +1,12 @@
 import { Database } from 'bun:sqlite';
 
 import type { LassoConfig } from '../../config/load.ts';
+
+import { checkTokenBudget } from '../service.ts';
 import type { ObservationPriority } from './parser.ts';
 
 import {
   checkShouldReflect,
-  countEntries,
-  countReflections,
-  countSnapshots,
   createEntries,
   createReflection,
   createSnapshot,
@@ -20,6 +19,7 @@ import {
   searchEntries,
 } from './db.ts';
 import { parseObservationEntries, priorityEmoji } from './parser.ts';
+import { buildMemoryStatusModel } from './status.ts';
 import { estimateTokens } from './tokens.ts';
 import {
   getDefaultTemplate,
@@ -80,11 +80,11 @@ export function checkShouldObserve(
 ): ShouldObserveResult {
   const scope = config.observers.memory.scope;
   const threshold = config.observers.memory.observationThreshold;
-  const lastObserved = getObservationState(db, scope);
-  const unobserved = currentTokens - lastObserved;
-  const needed = unobserved >= threshold;
-
-  return { currentTokens, lastObserved, needed, threshold, unobserved };
+  return checkTokenBudget({
+    currentTokens,
+    lastObservedTokens: getObservationState(db, scope),
+    thresholdTokens: threshold,
+  });
 }
 
 export function handleMemoryContext(db: Database, options: MemoryContextOptions) {
@@ -181,15 +181,14 @@ export function handleMemoryShouldReflect(db: Database, config: LassoConfig) {
 }
 
 export function handleMemoryStatus(db: Database) {
-  const snapshots = listSnapshots(db, 1);
-  const reflections = listReflections(db, 1);
+  const status = buildMemoryStatusModel(db);
 
   console.log('Memory Observer Status:');
-  console.log(`- Snapshots: ${countSnapshots(db)}`);
-  console.log(`- Entries: ${countEntries(db)}`);
-  console.log(`- Reflections: ${countReflections(db)}`);
-  console.log(`Last snapshot: ${snapshots[0]?.created_at ?? 'never'}`);
-  console.log(`Last reflection: ${reflections[0]?.created_at ?? 'never'}`);
+  console.log(`- Snapshots: ${status.snapshots}`);
+  console.log(`- Entries: ${status.entries}`);
+  console.log(`- Reflections: ${status.reflections}`);
+  console.log(`Last snapshot: ${status.lastSnapshot}`);
+  console.log(`Last reflection: ${status.lastReflection}`);
 }
 
 export function handleMemoryWorking(db: Database, options: MemoryWorkingOptions) {

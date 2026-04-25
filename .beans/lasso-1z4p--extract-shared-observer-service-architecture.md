@@ -1,10 +1,11 @@
 ---
 # lasso-1z4p
 title: Extract shared observer service architecture
-status: draft
+status: in-progress
 type: epic
+priority: normal
 created_at: 2026-04-25T15:58:44Z
-updated_at: 2026-04-25T15:58:44Z
+updated_at: 2026-04-25T21:07:57Z
 blocking:
     - lasso-3tgk
 blocked_by:
@@ -39,3 +40,21 @@ Ship memory observer improvements first — they prove the patterns work. Then e
 ## Dependency chain
 - Blocked by: lasso-93aq (memory observer optimization)
 - Blocks: lasso-3tgk (lint observer optimization), future observers
+
+## Work Plan
+
+- [x] Inspect current memory and lint observer architecture
+- [x] Design shared observer service alternatives
+- [x] Implement shared observer primitives
+- [x] Port memory observer to shared service
+- [x] Add unit and integration tests
+- [x] Run formatter, linter, tests, and typecheck
+
+## Summary of Changes
+
+Started the shared observer architecture by extracting common token-budget and saturation gates into `src/observers/service.ts`. Ported memory should-observe logic to the shared token gate, exposed lint scan gating through the same primitives, and reused the saturation gate in lint status output. Added focused unit coverage and ran formatter, linter, full test suite, and TypeScript typecheck.
+
+## Remaining Follow-up
+
+- [ ] Extract full observe/persist/reflect lifecycle after current callers converge on shared gates
+- [ ] Port lint scanner execution to enforce scan thresholds once lint token state persistence exists
