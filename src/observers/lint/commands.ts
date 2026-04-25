@@ -1,4 +1,5 @@
 import { Database } from 'bun:sqlite';
+import { fstatSync } from 'node:fs';
 
 import type { LassoConfig } from '../../config/load.ts';
 import type { LintStatus } from './db';
@@ -44,8 +45,17 @@ export async function handleLintScan(db: Database, options: LintScanOptions, con
 
 async function readConversation(options: LintScanOptions) {
   if (options.input) return Bun.file(options.input).text();
-  if (options.printPrompt) return Bun.stdin.text();
+  if (hasReadableStdin()) return Bun.stdin.text();
   return '';
+}
+
+function hasReadableStdin() {
+  try {
+    const stat = fstatSync(0);
+    return stat.isFIFO() || stat.isFile();
+  } catch {
+    return false;
+  }
 }
 
 async function readDetectorOutput(prompt: string, options: LintScanOptions, config: LassoConfig) {

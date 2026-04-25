@@ -38,19 +38,30 @@ describe('setup CLI integration', () => {
     const extension = await Bun.file(path.join(cwd, '.pi', 'extensions', 'lasso.ts')).text();
     const status = await runLasso(cwd, ['status']);
 
-    expect(setup.exitCode).toBe(0);
-    expect(setup.stdout).toContain('Set up lasso project');
-    expect(setup.stdout).toContain('Harness: pi (Pi coding agent integration)');
-    expect(setup.stdout).toContain('lint (detects recurring corrections');
+    expectSetupOutput(setup.stdout);
     expect(config.harness.type).toBe('pi');
     expect(config.observers.lint.detectorCommand).toBe('lasso-detector');
-    expect(extension).toContain('lasso-status');
-    expect(extension).toContain('void runLasso(args)');
-    expect(extension).toContain("pi.on('turn_end', (_event, ctx) => {");
-    expect(extension).not.toContain("pi.on('turn_end', async");
+    expectGeneratedPiExtension(extension);
     expect(status.stdout).toContain('Lint Observer Status');
     expect(status.stdout).toContain('Memory Observer Status');
 
     await rm(cwd, { force: true, recursive: true });
   });
 });
+
+function expectGeneratedPiExtension(extension: string) {
+  expect(extension).toContain('lasso-status');
+  expect(extension).toContain('serializeConversation(convertToLlm(messages))');
+  expect(extension).toContain("runLasso(['lint', 'scan'], { input: conversation })");
+  expect(extension).toContain("runLasso(['memory', 'observe'], { input: conversation })");
+  expect(extension).toContain("pi.registerCommand('lasso:lint:scan'");
+  expect(extension).toContain("pi.registerCommand('lasso:memory:status'");
+  expect(extension).toContain("pi.on('turn_end', (_event, ctx) => {");
+  expect(extension).not.toContain("pi.on('turn_end', async");
+}
+
+function expectSetupOutput(stdout: string) {
+  expect(stdout).toContain('Set up lasso project');
+  expect(stdout).toContain('Harness: pi (Pi coding agent integration)');
+  expect(stdout).toContain('lint (detects recurring corrections');
+}

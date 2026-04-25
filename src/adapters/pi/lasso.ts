@@ -1,3 +1,12 @@
+import type { HarnessHostCapabilities } from '../contract.ts';
+
+export const piHostCapabilities = {
+  compactionHooks: true,
+  footerStatus: true,
+  promptInjection: true,
+  slashCommands: true,
+} satisfies HarnessHostCapabilities;
+
 export interface LassoCommandResult {
   exitCode: number;
   stderr: string;
@@ -9,12 +18,15 @@ export interface RunLassoOptions {
   input?: string;
 }
 
-export function buildLassoArgs(command: 'lint-status' | 'memory-observe' | 'memory-status') {
+export type PiLassoCommand = 'lint-scan' | 'lint-status' | 'memory-observe' | 'memory-status';
+
+export function buildLassoArgs(command: PiLassoCommand) {
   const commands = {
+    'lint-scan': ['lint', 'scan'],
     'lint-status': ['lint', 'status'],
-    'memory-observe': ['memory', 'observe', '--content'],
+    'memory-observe': ['memory', 'observe'],
     'memory-status': ['memory', 'status'],
-  } satisfies Record<typeof command, string[]>;
+  } satisfies Record<PiLassoCommand, string[]>;
 
   return commands[command];
 }

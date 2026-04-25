@@ -5,12 +5,18 @@ import path from 'node:path';
 const projectRoot = process.cwd();
 const entrypoint = path.join(projectRoot, 'index.ts');
 
-async function runLasso(cwd: string, args: string[]) {
+async function runLasso(cwd: string, args: string[], input?: string) {
   const process = Bun.spawn(['bun', 'run', entrypoint, ...args], {
     cwd,
     stderr: 'pipe',
+    stdin: input ? 'pipe' : 'ignore',
     stdout: 'pipe',
   });
+
+  if (input && process.stdin) {
+    process.stdin.write(input);
+    process.stdin.end();
+  }
 
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(process.stdout).text(),
@@ -68,6 +74,28 @@ describe('lint CLI detector output integration', () => {
     expect(invalidReject.exitCode).toBe(1);
     expect(invalidReject.stderr).toContain('Cannot transition lint entry');
     expect(show.stdout).toContain('Status: accepted');
+
+    await rm(cwd, { force: true, recursive: true });
+  });
+});
+
+describe('lint CLI stdin integration', () => {
+  test('scan reads conversation from stdin by default', async () => {
+    const cwd = path.join(projectRoot, 'tests', '.tmp_lint_cli_stdin');
+    await rm(cwd, { force: true, recursive: true });
+    await mkdir(cwd, { recursive: true });
+    await Bun.write(path.join(cwd, 'detector.json'), detectorOutput());
+
+    const scan = await runLasso(
+      cwd,
+      ['lint', 'scan', '--detector-output', 'detector.json'],
+      'User: stop using antd here',
+    );
+    const list = await runLasso(cwd, ['lint', 'list']);
+
+    expect(scan.exitCode).toBe(0);
+    expect(scan.stdout).toContain('1 created');
+    expect(list.stdout).toContain('Avoid antd imports in migrated pages');
 
     await rm(cwd, { force: true, recursive: true });
   });
