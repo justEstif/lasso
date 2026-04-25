@@ -31,8 +31,13 @@ export const lintScanRuns = sqliteTable('lint_scan_runs', {
 export const memorySnapshots = sqliteTable('memory_snapshots', {
   content: text('content').notNull(),
   created_at: text('created_at').notNull(),
+  fingerprint: text('fingerprint'),
   id: text('id').primaryKey(),
+  last_seen_at: text('last_seen_at'),
+  normalized_hash: text('normalized_hash'),
   scope: text('scope').notNull(),
+  seen_count: integer('seen_count').notNull().default(1),
+  superseded_by: text('superseded_by'),
 });
 
 export const memoryReflections = sqliteTable('memory_reflections', {

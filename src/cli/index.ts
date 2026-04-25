@@ -14,6 +14,7 @@ import {
   handleLintTransition,
 } from '../observers/lint/commands.ts';
 import {
+  handleMemoryContext,
   handleMemoryExport,
   handleMemoryObserve,
   handleMemoryReflect,
@@ -229,6 +230,12 @@ function registerMemoryCommands(
     .option('--input <path>', 'Reflection content file')
     .option('--limit <count>', 'Number of recent snapshots to mark as sources', '20')
     .action((opts) => handleMemoryReflect(db, opts));
+  memoryCmd
+    .command('context')
+    .description('Show focused memory context, optionally ranked by query')
+    .option('--query <text>', 'Query used to rank relevant memory')
+    .option('--limit <count>', 'Maximum number of memory items', '5')
+    .action((opts) => handleMemoryContext(db, opts));
   memoryCmd
     .command('export')
     .description('Export memory snapshots and reflections to markdown')

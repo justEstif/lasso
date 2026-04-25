@@ -1,6 +1,6 @@
 {
   "name": "@justestif/lasso",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Harness-agnostic observational memory and linting CLI for coding agents.",
   "module": "index.ts",
   "bin": {

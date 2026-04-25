@@ -216,9 +216,10 @@ export default function (pi: ExtensionAPI) {
     updateLassoStatus(ctx);
   });
 
-  pi.on('before_agent_start', async (event) => {
-    const memory = await runLasso(['memory', 'export']);
-    if (memory.exitCode !== 0 || !memory.stdout.trim()) return;
+  pi.on('before_agent_start', async (event, ctx) => {
+    const query = serializePiConversation(ctx).slice(-4000);
+    const memory = await runLasso(['memory', 'context', '--query', query]);
+    if (memory.exitCode !== 0 || !memory.stdout.trim() || memory.stdout.includes('No relevant memory found.')) return;
 
     return {
       systemPrompt: `=== LASSO MEMORY ===\n${memory.stdout.trim()}\n====================\n\n${event.systemPrompt}`,
@@ -299,9 +300,12 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand('lasso:memory:reflect', {
-    description: 'Run lasso memory reflect',
-    handler: async (args, ctx) => {
-      await runMirroredCommand(`memory:reflect ${args}`, ctx);
+    description: 'Run lasso memory reflect on the current Pi conversation',
+    handler: async (_args, ctx) => {
+      const conversation = serializePiConversation(ctx);
+      const result = await runLasso(['memory', 'reflect'], { input: conversation });
+      ctx.ui.notify((result.stdout || result.stderr).trim(), result.exitCode === 0 ? 'info' : 'error');
+      updateLassoStatus(ctx);
     },
   });
 

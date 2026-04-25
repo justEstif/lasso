@@ -10,12 +10,19 @@ import {
   listReflections,
   listSnapshots,
   parseSourceSnapshotIds,
+  searchSnapshots,
 } from './db.ts';
+import { tokenSimilarity } from './fingerprint.ts';
 
 interface MemoryObserveOptions {
   content?: string;
   input?: string;
   scope?: 'resource' | 'thread';
+}
+
+interface MemoryContextOptions {
+  limit?: string;
+  query?: string;
 }
 
 interface MemoryReflectOptions {
@@ -74,8 +81,20 @@ export function handleMemoryStatus(db: Database) {
   console.log(`Last reflection: ${reflections[0]?.created_at ?? 'never'}`);
 }
 
+export function handleMemoryContext(db: Database, options: MemoryContextOptions) {
+  const snapshots = options.query
+    ? searchSnapshots(db, options.query, Number(options.limit ?? 5))
+    : listSnapshots(db, Number(options.limit ?? 5));
+
+  console.log('# Lasso Memory Context\n');
+  if (snapshots.length === 0) console.log('No relevant memory found.');
+  for (const snapshot of snapshots) {
+    console.log(`- ${snapshot.content}`);
+  }
+}
+
 export function handleMemoryExport(db: Database) {
-  const snapshots = listSnapshots(db, 100);
+  const snapshots = distinctSnapshots(listSnapshots(db, 100)).slice(0, 5);
   const reflections = listReflections(db, 100);
 
   console.log('# Memory Observer Export\n');
@@ -92,9 +111,25 @@ export function handleMemoryExport(db: Database) {
   if (snapshots.length === 0) console.log('No snapshots found.\n');
   for (const snapshot of snapshots) {
     console.log(`### ${snapshot.id} (${snapshot.scope})`);
-    console.log(`**Created:** ${snapshot.created_at}\n`);
+    console.log(`**Created:** ${snapshot.created_at}`);
+    console.log(`**Seen:** ${snapshot.seen_count ?? 1}\n`);
     console.log(`${snapshot.content}\n`);
   }
+}
+
+function distinctSnapshots(snapshots: ReturnType<typeof listSnapshots>) {
+  const selected: typeof snapshots = [];
+
+  for (const snapshot of snapshots) {
+    if (selected.some((existing) => isNearDuplicate(snapshot.content, existing.content))) continue;
+    selected.push(snapshot);
+  }
+
+  return selected;
+}
+
+function isNearDuplicate(left: string, right: string) {
+  return tokenSimilarity(left, right) >= 0.7;
 }
 
 async function readMemoryContent(options: MemoryObserveOptions | MemoryReflectOptions) {
