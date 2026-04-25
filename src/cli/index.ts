@@ -19,6 +19,7 @@ import {
   handleMemoryObserve,
   handleMemoryReflect,
   handleMemoryShouldObserve,
+  handleMemoryShouldReflect,
   handleMemoryStatus,
   handleMemoryWorking,
 } from '../observers/memory/commands.ts';
@@ -233,6 +234,7 @@ function registerMemoryCommands(
     .action((opts) => handleMemoryObserve(db, opts, config));
   registerMemoryReflectAndContext(memoryCmd, db);
   registerMemoryObserveCheck(memoryCmd, db, config);
+  registerMemoryReflectCheck(memoryCmd, db, config);
   registerMemoryWorkingCommand(memoryCmd, db);
   memoryCmd
     .command('export')
@@ -276,6 +278,17 @@ function registerMemoryReflectAndContext(memoryCmd: Command, db: Database) {
       'Sort entries by field:order — field is observed_at|created_at|referenced_date, order is asc|desc',
     )
     .action((opts) => handleMemoryContext(db, opts));
+}
+
+function registerMemoryReflectCheck(
+  memoryCmd: Command,
+  db: Database,
+  config: Awaited<ReturnType<typeof loadConfig>>,
+) {
+  memoryCmd
+    .command('should-reflect')
+    .description('Check if memory reflection is needed based on token budget')
+    .action(() => handleMemoryShouldReflect(db, config));
 }
 
 function registerMemoryWorkingCommand(memoryCmd: Command, db: Database) {

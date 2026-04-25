@@ -117,6 +117,16 @@ ${conversation}
 </conversation>`;
 }
 
+function buildAutoReflectionPrompt(conversation: string) {
+  return `Create a consolidated memory reflection for this agent session. Summarize durable facts, decisions, patterns, and current state.
+
+Return JSON with keys threadSummary and resourceSummary.
+
+<conversation>
+${conversation}
+</conversation>`;
+}
+
 function buildMemoryReflectorPrompt(event: LassoCompactionEvent) {
   const { messagesToSummarize, previousSummary, turnPrefixMessages } = event.preparation;
   const conversation = serializeConversation(convertToLlm([...messagesToSummarize, ...turnPrefixMessages]));
@@ -209,7 +219,7 @@ async function observeWithLasso(ctx: LassoStatusContext) {
     runLasso(['lint', 'scan'], { input: conversation }),
     persistMemoryObservation(ctx, conversation, estimatedTokens),
   ])
-    .then(() => updateLassoStatus(ctx))
+    .then(() => triggerReflectionIfNeeded(ctx))
     .catch((error) => {
       ctx.ui.notify(`lasso observation failed: ${error instanceof Error ? error.message : String(error)}`, 'warning');
       updateLassoStatus(ctx);
@@ -222,6 +232,26 @@ function parseLassoCommand(args: string) {
     .split(/\s+/)
     .filter(Boolean)
     .flatMap((part) => part.split(':').filter(Boolean));
+}
+
+async function triggerReflectionIfNeeded(ctx: LassoStatusContext) {
+  const check = await runLasso(['memory', 'should-reflect']);
+  if (check.exitCode !== 0) {
+    updateLassoStatus(ctx);
+    return;
+  }
+
+  ctx.ui.setStatus('lasso', '[lasso: reflecting...]');
+  try {
+    const conversation = serializePiConversation(ctx);
+    const result = await runPiMemoryModel(ctx, buildAutoReflectionPrompt(conversation));
+    const summary = typeof result.parsed?.threadSummary === 'string' ? result.parsed.threadSummary : result.rawText;
+    if (summary.trim()) await runLasso(['memory', 'reflect'], { input: summary.trim() });
+  } catch {
+    // Non-critical — reflection will be retried on next threshold breach or compaction
+  } finally {
+    updateLassoStatus(ctx);
+  }
 }
 
 async function runMirroredCommand(args: string, ctx: LassoStatusContext) {

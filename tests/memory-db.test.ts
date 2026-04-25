@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { runMigrations } from '../src/db/migrations.ts';
 import {
+  checkShouldReflect,
   countReflections,
   countSnapshots,
   createReflection,
@@ -10,6 +11,7 @@ import {
   listReflections,
   listSnapshots,
   parseSourceSnapshotIds,
+  recordObservationTokenCount,
   searchSnapshots,
 } from '../src/observers/memory/db.ts';
 
@@ -63,5 +65,25 @@ describe('memory repository', () => {
     expect(listSnapshots(db).find((snapshot) => snapshot.id === first.id)?.seen_count).toBe(2);
     expect(searchSnapshots(db, 'Bun file IO')).toHaveLength(1);
     expect(searchSnapshots(db, 'Bun file IO')[0]?.content).toContain('Bun APIs');
+  });
+});
+
+describe('reflection token threshold', () => {
+  test('checkShouldReflect returns needed when threshold exceeded', () => {
+    const db = memoryDb();
+
+    const below = checkShouldReflect(db, 'thread', 40_000);
+    expect(below.needed).toBe(false);
+    expect(below.lastObserved).toBe(0);
+
+    recordObservationTokenCount(db, 'thread', 20_000);
+    const mid = checkShouldReflect(db, 'thread', 40_000);
+    expect(mid.needed).toBe(false);
+    expect(mid.lastObserved).toBe(20_000);
+
+    recordObservationTokenCount(db, 'thread', 45_000);
+    const exceeded = checkShouldReflect(db, 'thread', 40_000);
+    expect(exceeded.needed).toBe(true);
+    expect(exceeded.lastObserved).toBe(45_000);
   });
 });

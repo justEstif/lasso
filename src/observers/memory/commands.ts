@@ -4,6 +4,7 @@ import type { LassoConfig } from '../../config/load.ts';
 import type { ObservationPriority } from './parser.ts';
 
 import {
+  checkShouldReflect,
   countEntries,
   countReflections,
   countSnapshots,
@@ -167,6 +168,14 @@ export function handleMemoryShouldObserve(
   config: LassoConfig,
 ) {
   const result = checkShouldObserve(db, currentTokens, config);
+  console.log(JSON.stringify(result));
+  process.exit(result.needed ? 0 : 1);
+}
+
+export function handleMemoryShouldReflect(db: Database, config: LassoConfig) {
+  const scope = config.observers.memory.scope;
+  const threshold = config.observers.memory.reflectionThreshold;
+  const result = checkShouldReflect(db, scope, threshold);
   console.log(JSON.stringify(result));
   process.exit(result.needed ? 0 : 1);
 }

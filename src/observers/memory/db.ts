@@ -49,6 +49,21 @@ export type MemorySnapshot = typeof memorySnapshots.$inferSelect & { scope: Memo
 
 export type ObservationEntry = typeof observationEntries.$inferSelect;
 
+export interface ShouldReflectResult {
+  lastObserved: number;
+  needed: boolean;
+  threshold: number;
+}
+
+export function checkShouldReflect(
+  db: Database,
+  scope: MemoryScope,
+  threshold: number,
+): ShouldReflectResult {
+  const lastObserved = getObservationState(db, scope);
+  return { lastObserved, needed: lastObserved >= threshold, threshold };
+}
+
 export function countEntries(db: Database): number {
   const row = drizzle(db)
     .select({ count: sql<number>`count(*)` })

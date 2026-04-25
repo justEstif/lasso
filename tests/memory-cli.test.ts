@@ -141,3 +141,37 @@ describe('memory should-observe', () => {
     await rm(cwd, { force: true, recursive: true });
   });
 });
+
+describe('memory should-reflect', () => {
+  test('respects reflection token budget threshold', async () => {
+    const cwd = await prepareTempProject('.tmp_memory_should_reflect');
+
+    // Default reflectionThreshold is 40,000 — no observations yet, so not needed
+    const initial = await runLasso(cwd, ['memory', 'should-reflect']);
+    expect(initial.exitCode).toBe(1);
+    const initialJson = JSON.parse(initial.stdout);
+    expect(initialJson.needed).toBe(false);
+    expect(initialJson.lastObserved).toBe(0);
+    expect(initialJson.threshold).toBe(40_000);
+
+    // Observe with 40,000 tokens — at threshold should trigger reflection
+    await observeMemory(cwd, 'User prefers Bun APIs for all file operations.', '40000');
+
+    const atThreshold = await runLasso(cwd, ['memory', 'should-reflect']);
+    expect(atThreshold.exitCode).toBe(0);
+    const atJson = JSON.parse(atThreshold.stdout);
+    expect(atJson.needed).toBe(true);
+    expect(atJson.lastObserved).toBe(40_000);
+
+    // Below threshold — observe with fewer tokens
+    await observeMemory(cwd, 'A minor observation.', '5000');
+
+    const below = await runLasso(cwd, ['memory', 'should-reflect']);
+    expect(below.exitCode).toBe(1);
+    const belowJson = JSON.parse(below.stdout);
+    expect(belowJson.needed).toBe(false);
+    expect(belowJson.lastObserved).toBe(5000);
+
+    await rm(cwd, { force: true, recursive: true });
+  });
+});
