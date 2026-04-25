@@ -1,20 +1,24 @@
 import { Database } from 'bun:sqlite';
 
 import type { LassoConfig } from '../../config/load.ts';
+import type { ObservationPriority } from './parser.ts';
 
 import {
+  countEntries,
   countReflections,
   countSnapshots,
+  createEntries,
   createReflection,
   createSnapshot,
   getObservationState,
+  listEntries,
   listReflections,
   listSnapshots,
   parseSourceSnapshotIds,
   recordObservationTokenCount,
-  searchSnapshots,
+  searchEntries,
 } from './db.ts';
-import { tokenSimilarity } from './fingerprint.ts';
+import { parseObservationEntries, priorityEmoji } from './parser.ts';
 import { estimateTokens } from './tokens.ts';
 
 export interface ShouldObserveResult {
@@ -25,17 +29,18 @@ export interface ShouldObserveResult {
   unobserved: number;
 }
 
-export interface ShouldObserveResult {
-  currentTokens: number;
-  lastObserved: number;
-  needed: boolean;
-  threshold: number;
-  unobserved: number;
+interface MemoryContextOptions {
+  after?: string;
+  before?: string;
+  limit?: string;
+  priority?: string;
+  query?: string;
 }
 
-interface MemoryContextOptions {
-  limit?: string;
-  query?: string;
+interface MemoryExportOptions {
+  after?: string;
+  before?: string;
+  priority?: string;
 }
 
 interface MemoryObserveOptions {
@@ -66,39 +71,32 @@ export function checkShouldObserve(
 }
 
 export function handleMemoryContext(db: Database, options: MemoryContextOptions) {
-  const snapshots = options.query
-    ? searchSnapshots(db, options.query, Number(options.limit ?? 5))
-    : listSnapshots(db, Number(options.limit ?? 5));
+  const filter = buildEntryFilter(options);
+  const entries = options.query
+    ? searchEntries(db, options.query, { ...filter, limit: Number(options.limit ?? 10) })
+    : listEntries(db, { ...filter, limit: Number(options.limit ?? 10) });
 
   console.log('# Lasso Memory Context\n');
-  if (snapshots.length === 0) console.log('No relevant memory found.');
-  for (const snapshot of snapshots) {
-    console.log(`- ${snapshot.content}`);
+  if (entries.length === 0) {
+    console.log('No relevant memory found.');
+    return;
+  }
+
+  for (const entry of entries) {
+    const emoji = priorityEmoji(entry.priority as ObservationPriority);
+    const category = entry.category ? `[${entry.category}] ` : '';
+    console.log(`- ${emoji} ${entry.observed_at}: ${category}${entry.content}`);
   }
 }
 
-export function handleMemoryExport(db: Database) {
-  const snapshots = distinctSnapshots(listSnapshots(db, 100)).slice(0, 5);
+export function handleMemoryExport(db: Database, options: MemoryExportOptions = {}) {
+  const filter = buildEntryFilter(options);
+  const entries = listEntries(db, { ...filter, limit: 200 });
   const reflections = listReflections(db, 100);
 
   console.log('# Memory Observer Export\n');
-  console.log('## Reflections\n');
-  if (reflections.length === 0) console.log('No reflections found.\n');
-  for (const reflection of reflections) {
-    console.log(`### ${reflection.id}`);
-    console.log(`**Created:** ${reflection.created_at}`);
-    console.log(`**Sources:** ${parseSourceSnapshotIds(reflection).join(', ') || 'none'}\n`);
-    console.log(`${reflection.consolidated_content}\n`);
-  }
-
-  console.log('## Snapshots\n');
-  if (snapshots.length === 0) console.log('No snapshots found.\n');
-  for (const snapshot of snapshots) {
-    console.log(`### ${snapshot.id} (${snapshot.scope})`);
-    console.log(`**Created:** ${snapshot.created_at}`);
-    console.log(`**Seen:** ${snapshot.seen_count ?? 1}\n`);
-    console.log(`${snapshot.content}\n`);
-  }
+  renderReflections(reflections);
+  renderEntries(entries);
 }
 
 export async function handleMemoryObserve(
@@ -115,11 +113,15 @@ export async function handleMemoryObserve(
   const scope = options.scope ?? config.observers.memory.scope;
   const snapshot = createSnapshot(db, { content: content.trim(), scope });
 
-  // Record token count so should-observe can track unobserved tokens
+  const parsed = parseObservationEntries(content.trim());
+  const entries = createEntries(db, { entries: parsed, snapshotId: snapshot.id });
+
   const observedTokens = options.tokens ? Number(options.tokens) : estimateTokens(content);
   recordObservationTokenCount(db, scope, observedTokens);
 
-  console.log(`Memory snapshot ${snapshot.id} created (${snapshot.scope}).`);
+  console.log(
+    `Memory snapshot ${snapshot.id} created with ${entries.length} entries (${snapshot.scope}).`,
+  );
 }
 
 export async function handleMemoryReflect(db: Database, options: MemoryReflectOptions) {
@@ -158,28 +160,70 @@ export function handleMemoryStatus(db: Database) {
 
   console.log('Memory Observer Status:');
   console.log(`- Snapshots: ${countSnapshots(db)}`);
+  console.log(`- Entries: ${countEntries(db)}`);
   console.log(`- Reflections: ${countReflections(db)}`);
   console.log(`Last snapshot: ${snapshots[0]?.created_at ?? 'never'}`);
   console.log(`Last reflection: ${reflections[0]?.created_at ?? 'never'}`);
 }
 
-function distinctSnapshots(snapshots: ReturnType<typeof listSnapshots>) {
-  const selected: typeof snapshots = [];
-
-  for (const snapshot of snapshots) {
-    if (selected.some((existing) => isNearDuplicate(snapshot.content, existing.content))) continue;
-    selected.push(snapshot);
-  }
-
-  return selected;
+function buildEntryFilter(options: MemoryContextOptions | MemoryExportOptions) {
+  const priority = (options as MemoryContextOptions).priority as
+    | ObservationPriority
+    | undefined;
+  return {
+    after: options.after,
+    before: options.before,
+    priority,
+  };
 }
 
-function isNearDuplicate(left: string, right: string) {
-  return tokenSimilarity(left, right) >= 0.7;
+function groupByCategory(entries: ReturnType<typeof listEntries>) {
+  const groups = new Map<string, typeof entries>();
+
+  for (const entry of entries) {
+    const existing = groups.get(entry.category) ?? [];
+    existing.push(entry);
+    groups.set(entry.category, existing);
+  }
+
+  return groups;
 }
 
 async function readMemoryContent(options: MemoryObserveOptions | MemoryReflectOptions) {
   if (options.content) return options.content;
   if (options.input) return Bun.file(options.input).text();
   return Bun.stdin.text();
+}
+
+function renderEntries(entries: ReturnType<typeof listEntries>) {
+  console.log('## Observation Entries\n');
+  if (entries.length === 0) {
+    console.log('No observation entries found.\n');
+    return;
+  }
+
+  const grouped = groupByCategory(entries);
+  for (const [category, categoryEntries] of grouped) {
+    if (category) console.log(`### ${category}\n`);
+    for (const entry of categoryEntries) {
+      const emoji = priorityEmoji(entry.priority as ObservationPriority);
+      console.log(`- ${emoji} ${entry.observed_at}: ${entry.content}`);
+    }
+    console.log();
+  }
+}
+
+function renderReflections(reflections: ReturnType<typeof listReflections>) {
+  console.log('## Reflections\n');
+  if (reflections.length === 0) {
+    console.log('No reflections found.\n');
+    return;
+  }
+
+  for (const reflection of reflections) {
+    console.log(`### ${reflection.id}`);
+    console.log(`**Created:** ${reflection.created_at}`);
+    console.log(`**Sources:** ${parseSourceSnapshotIds(reflection).join(', ') || 'none'}\n`);
+    console.log(`${reflection.consolidated_content}\n`);
+  }
 }

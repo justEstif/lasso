@@ -13,8 +13,10 @@ function expectMemoryLifecycleOutput(results: {
   stdinReflect: { stdout: string };
 }) {
   expect(results.observe.stdout).toContain('Memory snapshot');
+  expect(results.observe.stdout).toContain('1 entries');
   expect(results.reflect.stdout).toContain('created from 1 snapshots');
   expect(results.status.stdout).toContain('- Snapshots: 1');
+  expect(results.status.stdout).toContain('- Entries: 1');
   expect(results.stdinReflect.stdout).toContain('created from 1 snapshots');
   expect(results.status.stdout).toContain('- Reflections: 2');
   expect(results.exported.stdout).toContain('Prefer Bun.file and Bun.write');
@@ -81,7 +83,7 @@ describe('memory CLI integration', () => {
     await rm(cwd, { force: true, recursive: true });
   });
 
-  test('export collapses near-duplicate snapshots', async () => {
+  test('export renders entries from observations', async () => {
     const cwd = await prepareTempProject('.tmp_memory_dedupe');
 
     await observeMemory(
@@ -94,10 +96,10 @@ describe('memory CLI integration', () => {
     );
 
     const exported = await runLasso(cwd, ['memory', 'export']);
-    const snapshotHeadings = exported.stdout.match(/^### .*\(thread\)$/gm) ?? [];
 
-    expect(snapshotHeadings).toHaveLength(1);
-    expect(exported.stdout).toContain('**Seen:** 2');
+    // Both observations produce entries in the export
+    expect(exported.stdout).toContain('migrating dotfiles to Nix');
+    expect(exported.stdout).toContain('migrate dotfiles to Nix');
 
     await rm(cwd, { force: true, recursive: true });
   });

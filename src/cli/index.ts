@@ -225,24 +225,15 @@ function registerMemoryCommands(
     .option('--scope <scope>', 'Memory scope: thread or resource')
     .option('--tokens <count>', 'Estimated token count of the observed conversation')
     .action((opts) => handleMemoryObserve(db, opts, config));
-  memoryCmd
-    .command('reflect')
-    .description('Record a consolidated memory reflection')
-    .option('--content <text>', 'Reflection content')
-    .option('--input <path>', 'Reflection content file')
-    .option('--limit <count>', 'Number of recent snapshots to mark as sources', '20')
-    .action((opts) => handleMemoryReflect(db, opts));
-  memoryCmd
-    .command('context')
-    .description('Show focused memory context, optionally ranked by query')
-    .option('--query <text>', 'Query used to rank relevant memory')
-    .option('--limit <count>', 'Maximum number of memory items', '5')
-    .action((opts) => handleMemoryContext(db, opts));
+  registerMemoryReflectAndContext(memoryCmd, db);
   registerMemoryObserveCheck(memoryCmd, db, config);
   memoryCmd
     .command('export')
-    .description('Export memory snapshots and reflections to markdown')
-    .action(() => handleMemoryExport(db));
+    .description('Export memory observations and reflections to markdown')
+    .option('--priority <level>', 'Filter by priority: high, medium, low')
+    .option('--after <date>', 'Show entries observed on or after date (YYYY-MM-DD)')
+    .option('--before <date>', 'Show entries observed on or before date (YYYY-MM-DD)')
+    .action((opts) => handleMemoryExport(db, opts));
 }
 
 function registerMemoryObserveCheck(
@@ -255,6 +246,28 @@ function registerMemoryObserveCheck(
     .description('Check if memory observation is needed based on token budget')
     .requiredOption('--tokens <count>', 'Current estimated token count of the conversation')
     .action((opts) => handleMemoryShouldObserve(db, Number(opts.tokens), config));
+}
+
+function registerMemoryReflectAndContext(
+  memoryCmd: Command,
+  db: Database,
+) {
+  memoryCmd
+    .command('reflect')
+    .description('Record a consolidated memory reflection')
+    .option('--content <text>', 'Reflection content')
+    .option('--input <path>', 'Reflection content file')
+    .option('--limit <count>', 'Number of recent snapshots to mark as sources', '20')
+    .action((opts) => handleMemoryReflect(db, opts));
+  memoryCmd
+    .command('context')
+    .description('Show focused memory context, optionally ranked by query')
+    .option('--query <text>', 'Query used to rank relevant memory')
+    .option('--limit <count>', 'Maximum number of memory items', '10')
+    .option('--priority <level>', 'Filter by priority: high, medium, low')
+    .option('--after <date>', 'Show entries observed on or after date (YYYY-MM-DD)')
+    .option('--before <date>', 'Show entries observed on or before date (YYYY-MM-DD)')
+    .action((opts) => handleMemoryContext(db, opts));
 }
 
 function registerObserverToggleCommands(program: Command) {

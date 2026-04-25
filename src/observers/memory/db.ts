@@ -1,8 +1,15 @@
 import { Database } from 'bun:sqlite';
-import { desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, lte, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/bun-sqlite';
 
-import { memoryObservationState, memoryReflections, memorySnapshots } from '../../db/schema.ts';
+import type { ObservationPriority, ParsedEntry } from './parser.ts';
+
+import {
+  memoryObservationState,
+  memoryReflections,
+  memorySnapshots,
+  observationEntries,
+} from '../../db/schema.ts';
 import {
   hammingDistance,
   memoryFingerprint,
@@ -10,6 +17,10 @@ import {
   tokenSimilarity,
 } from './fingerprint.ts';
 
+export interface CreateEntriesInput {
+  entries: ParsedEntry[];
+  snapshotId: string;
+}
 export interface CreateReflectionInput {
   consolidatedContent: string;
   sourceSnapshotIds: string[];
@@ -18,11 +29,29 @@ export interface CreateSnapshotInput {
   content: string;
   scope: MemoryScope;
 }
+
+export interface EntryFilterOptions {
+  after?: string;
+  before?: string;
+  limit?: number;
+  priority?: ObservationPriority;
+}
+
 export type MemoryReflection = typeof memoryReflections.$inferSelect;
 
 export type MemoryScope = 'resource' | 'thread';
 
 export type MemorySnapshot = typeof memorySnapshots.$inferSelect & { scope: MemoryScope };
+
+export type ObservationEntry = typeof observationEntries.$inferSelect;
+
+export function countEntries(db: Database): number {
+  const row = drizzle(db)
+    .select({ count: sql<number>`count(*)` })
+    .from(observationEntries)
+    .get();
+  return Number(row?.count ?? 0);
+}
 
 export function countReflections(db: Database): number {
   const row = drizzle(db)
@@ -38,6 +67,25 @@ export function countSnapshots(db: Database): number {
     .from(memorySnapshots)
     .get();
   return Number(row?.count ?? 0);
+}
+
+export function createEntries(db: Database, input: CreateEntriesInput): ObservationEntry[] {
+  const now = new Date().toISOString();
+  const rows = input.entries.map((entry) => ({
+    category: entry.category,
+    content: entry.content,
+    created_at: now,
+    id: crypto.randomUUID(),
+    observed_at: entry.observedAt,
+    priority: entry.priority,
+    snapshot_id: input.snapshotId,
+  }));
+
+  for (const row of rows) {
+    drizzle(db).insert(observationEntries).values(row).run();
+  }
+
+  return rows;
 }
 
 export function createReflection(db: Database, input: CreateReflectionInput): MemoryReflection {
@@ -81,6 +129,38 @@ export function getObservationState(db: Database, scope: MemoryScope): number {
     .where(eq(memoryObservationState.scope, scope))
     .get();
   return row?.last_observed_tokens ?? 0;
+}
+
+export function listEntries(db: Database, options: EntryFilterOptions = {}): ObservationEntry[] {
+  const { after, before, limit = 100, priority } = options;
+  const conditions = [];
+
+  if (priority) conditions.push(eq(observationEntries.priority, priority));
+  if (after) conditions.push(gte(observationEntries.observed_at, after));
+  if (before) conditions.push(lte(observationEntries.observed_at, before));
+
+  const query = drizzle(db)
+    .select()
+    .from(observationEntries)
+    .orderBy(desc(observationEntries.observed_at), desc(observationEntries.created_at));
+
+  if (conditions.length > 0) {
+    query.where(and(...conditions));
+  }
+
+  return query.limit(limit).all();
+}
+
+export function listEntriesBySnapshot(
+  db: Database,
+  snapshotId: string,
+): ObservationEntry[] {
+  return drizzle(db)
+    .select()
+    .from(observationEntries)
+    .where(eq(observationEntries.snapshot_id, snapshotId))
+    .orderBy(desc(observationEntries.observed_at))
+    .all();
 }
 
 export function listReflections(db: Database, limit = 20): MemoryReflection[] {
@@ -134,6 +214,22 @@ export function recordObservationTokenCount(
   }
 }
 
+export function searchEntries(
+  db: Database,
+  query: string,
+  options: EntryFilterOptions = {},
+): ObservationEntry[] {
+  const queryTokens = new Set(query.toLowerCase().match(/[a-z0-9][a-z0-9_.:/-]{2,}/g));
+  const entries = listEntries(db, { ...options, limit: 200 });
+
+  return entries
+    .map((entry) => ({ entry, score: scoreContent(entry.content, queryTokens) }))
+    .filter((result) => result.score > 0)
+    .toSorted((left, right) => right.score - left.score)
+    .slice(0, options.limit ?? 10)
+    .map((result) => result.entry);
+}
+
 export function searchSnapshots(db: Database, query: string, limit = 5): MemorySnapshot[] {
   const queryTokens = new Set(query.toLowerCase().match(/[a-z0-9][a-z0-9_.:/-]{2,}/g));
   return listSnapshots(db, 100)
@@ -185,7 +281,11 @@ function recordSnapshotSeen(db: Database, id: string): MemorySnapshot {
   } as MemorySnapshot;
 }
 
+function scoreContent(content: string, queryTokens: Set<string>): number {
+  const tokens = content.toLowerCase().match(/[a-z0-9][a-z0-9_.:/-]{2,}/g) ?? [];
+  return tokens.filter((token) => queryTokens.has(token)).length;
+}
+
 function scoreSnapshot(content: string, queryTokens: Set<string>): number {
-  const contentTokens = content.toLowerCase().match(/[a-z0-9][a-z0-9_.:/-]{2,}/g) ?? [];
-  return contentTokens.filter((token) => queryTokens.has(token)).length;
+  return scoreContent(content, queryTokens);
 }

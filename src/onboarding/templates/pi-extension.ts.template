@@ -95,11 +95,25 @@ function summarizeLintStatus(stdout: string) {
 
 function summarizeMemoryStatus(stdout: string) {
   const snapshots = stdout.match(/- Snapshots: (\d+)/)?.[1] ?? '?';
-  return `memory ${snapshots} snapshots`;
+  const entries = stdout.match(/- Entries: (\d+)/)?.[1] ?? '?';
+  return `memory ${snapshots} snapshots, ${entries} entries`;
 }
 
 function buildMemoryObserverPrompt(conversation: string) {
-  return `Extract durable memory from this agent conversation. Return JSON with keys summary, currentTask, and suggestedResponse. Keep only useful project facts, decisions, corrections, and continuation state.\n\n<conversation>\n${conversation}\n</conversation>`;
+  return `Extract durable memory from this agent conversation. Return a structured event log with dated, prioritized observations.
+
+Use this format:
+## Category Name
+- \u{1F534} YYYY-MM-DD: Observation detail (high priority — critical facts, decisions, corrections)
+- \u{1F7E1} YYYY-MM-DD: Observation detail (medium priority — useful patterns, preferences)
+- \u{1F7E2} YYYY-MM-DD: Observation detail (low priority — minor notes, future reference)
+
+Categories group related observations. Use 2-5 categories. Each bullet gets a priority emoji and date.
+Keep only useful project facts, decisions, corrections, and continuation state.
+
+<conversation>
+${conversation}
+</conversation>`;
 }
 
 function buildMemoryReflectorPrompt(event: LassoCompactionEvent) {
@@ -169,8 +183,8 @@ async function runPiMemoryModel(ctx: LassoStatusContext, prompt: string, signal?
 
 async function persistMemoryObservation(ctx: LassoStatusContext, conversation: string, tokens: number) {
   const result = await runPiMemoryModel(ctx, buildMemoryObserverPrompt(conversation));
-  const summary = typeof result.parsed?.summary === 'string' ? result.parsed.summary : result.rawText;
-  if (summary.trim()) await runLasso(['memory', 'observe', '--tokens', String(tokens)], { input: summary.trim() });
+  const text = result.rawText.trim();
+  if (text) await runLasso(['memory', 'observe', '--tokens', String(tokens)], { input: text });
 }
 
 async function observeWithLasso(ctx: LassoStatusContext) {

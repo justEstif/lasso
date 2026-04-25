@@ -28,6 +28,20 @@ export const lintScanRuns = sqliteTable('lint_scan_runs', {
   skipped_count: integer('skipped_count').notNull(),
 });
 
+export const observationEntries = sqliteTable('observation_entries', {
+  category: text('category').notNull(),
+  content: text('content').notNull(),
+  created_at: text('created_at').notNull(),
+  id: text('id').primaryKey(),
+  observed_at: text('observed_at').notNull(),
+  priority: text('priority', {
+    enum: ['high', 'low', 'medium'],
+  }).notNull(),
+  snapshot_id: text('snapshot_id')
+    .notNull()
+    .references(() => memorySnapshots.id),
+});
+
 export const memorySnapshots = sqliteTable('memory_snapshots', {
   content: text('content').notNull(),
   created_at: text('created_at').notNull(),

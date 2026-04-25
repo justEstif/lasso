@@ -8,6 +8,13 @@
       "when": 1777130824454,
       "tag": "0000_initial_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1777132125163,
+      "tag": "0001_windy_mentallo",
+      "breakpoints": true
     }
   ]
 }
