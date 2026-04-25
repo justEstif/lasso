@@ -11,17 +11,37 @@ import {
   lintScanRuns,
 } from '../../db/schema.ts';
 
+export interface AddRecurrenceInput {
+  note: string;
+  referencedDate?: null | string;
+  relativeOffset?: null | number;
+}
+
+export interface LintObservationState {
+  lastObservedTokens: number;
+  lastObservedTurns: number;
+}
+
 export type LintStatus = 'proposed' | 'accepted' | 'rejected' | 'deferred' | 'implemented';
 
 export type LintEntry = typeof lintEntries.$inferSelect & { status: LintStatus };
 export type LintRecurrence = typeof lintRecurrences.$inferSelect;
 export type LintScanRun = typeof lintScanRuns.$inferSelect;
 
-export function addRecurrence(db: Database, entryId: string, note: string): void {
+export function addRecurrence(db: Database, entryId: string, input: AddRecurrenceInput): void {
   const orm = drizzle(db);
   const now = new Date().toISOString();
 
-  orm.insert(lintRecurrences).values({ entry_id: entryId, note, observed_at: now }).run();
+  orm
+    .insert(lintRecurrences)
+    .values({
+      entry_id: entryId,
+      note: input.note,
+      observed_at: now,
+      referenced_date: input.referencedDate ?? null,
+      relative_offset: input.relativeOffset ?? null,
+    })
+    .run();
   orm.update(lintEntries).set({ updated_at: now }).where(eq(lintEntries.id, entryId)).run();
 }
 
@@ -74,9 +94,12 @@ export function getLastScanRun(db: Database): LintScanRun | null {
   return (prepared.get() as LintScanRun | undefined) ?? null;
 }
 
-export function getLintObservationState(db: Database): number {
+export function getLintObservationState(db: Database): LintObservationState {
   const row = drizzle(db).select().from(lintObservationState).limit(1).get();
-  return row?.last_observed_tokens ?? 0;
+  return {
+    lastObservedTokens: row?.last_observed_tokens ?? 0,
+    lastObservedTurns: row?.last_observed_turns ?? 0,
+  };
 }
 
 export function getRecurrences(db: Database, entryId: string): LintRecurrence[] {
@@ -114,7 +137,10 @@ export function listEntries(db: Database, status?: LintStatus): LintEntry[] {
   return prepared.all() as LintEntry[];
 }
 
-export function recordLintObservationTokenCount(db: Database, observedTokens: number): void {
+export function recordLintObservationProgress(
+  db: Database,
+  progress: { observedTokens: number; observedTurns: number },
+): void {
   const orm = drizzle(db);
   const now = new Date().toISOString();
   const existing = orm.select().from(lintObservationState).limit(1).get();
@@ -122,7 +148,11 @@ export function recordLintObservationTokenCount(db: Database, observedTokens: nu
   if (existing) {
     orm
       .update(lintObservationState)
-      .set({ last_observed_tokens: observedTokens, updated_at: now })
+      .set({
+        last_observed_tokens: progress.observedTokens,
+        last_observed_turns: progress.observedTurns,
+        updated_at: now,
+      })
       .where(eq(lintObservationState.id, existing.id))
       .run();
     return;
@@ -130,7 +160,11 @@ export function recordLintObservationTokenCount(db: Database, observedTokens: nu
 
   orm
     .insert(lintObservationState)
-    .values({ last_observed_tokens: observedTokens, updated_at: now })
+    .values({
+      last_observed_tokens: progress.observedTokens,
+      last_observed_turns: progress.observedTurns,
+      updated_at: now,
+    })
     .run();
 }
 

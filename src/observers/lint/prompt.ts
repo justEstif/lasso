@@ -37,9 +37,14 @@ function exampleOutput() {
   return {
     entries: [
       {
+        affected_paths: ['src/app/migrated-page.tsx'],
+        category: 'framework-migration',
         description: 'Agent keeps importing Form.Item from antd on migrated shadcn pages',
         matches_existing_id: null,
         proposed_form: "ESLint no-restricted-imports rule forbidding 'antd' in migrated pages",
+        referenced_date: null,
+        relative_offset: null,
+        severity: 'high',
         source_excerpt: "User: 'stop pulling Form.Item from antd, that page is on shadcn now'",
       },
     ],
@@ -56,7 +61,10 @@ function formatActiveEntries(entries: LintEntry[]) {
       return [
         `- id: ${entry.id}`,
         `  status: ${entry.status}`,
+        `  category: ${entry.category ?? ''}`,
+        `  severity: ${entry.severity ?? ''}`,
         `  description: ${entry.description}`,
+        `  affected_paths: ${entry.affected_paths ?? '[]'}`,
         `  proposed_form: ${entry.proposed_form ?? ''}`,
       ].join('\n');
     })

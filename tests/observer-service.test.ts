@@ -5,6 +5,7 @@ import { checkShouldScanLint } from '../src/observers/lint/commands.ts';
 import {
   checkSaturation,
   checkTokenBudget,
+  checkTurnBudget,
   runObserverLifecycle,
 } from '../src/observers/service.ts';
 
@@ -74,6 +75,7 @@ describe('shared observer skipped lifecycle', () => {
 describe('shared observer active lifecycle', () => {
   test('runs observation and persists progress when token gate is open', async () => {
     let persistedTokens = 0;
+    let persistedTurns = 0;
 
     const result = await runObserverLifecycle({
       gates: {
@@ -82,16 +84,19 @@ describe('shared observer active lifecycle', () => {
           lastObservedTokens: 4000,
           thresholdTokens: 10_000,
         }),
+        turnBudget: checkTurnBudget({ currentTurns: 12, lastObservedTurns: 1, thresholdTurns: 10 }),
       },
       observe: () => 'observed',
-      persistProgress: (tokens) => {
-        persistedTokens = tokens;
+      persistProgress: (progress) => {
+        persistedTokens = progress.observedTokens;
+        persistedTurns = progress.observedTurns ?? 0;
       },
     });
 
     expect(result.skipped).toBe(false);
     expect(result.skipped ? undefined : result.result).toBe('observed');
     expect(persistedTokens).toBe(15_000);
+    expect(persistedTurns).toBe(12);
   });
 });
 
@@ -107,9 +112,10 @@ describe('shared observer saturation gate', () => {
   });
 
   test('exposes lint scan gating through the shared primitives', () => {
-    const result = checkShouldScanLint(15, 5000, 0, defaultConfig);
+    const result = checkShouldScanLint(15, 5000, 0, 10, 0, defaultConfig);
 
     expect(result.saturation.saturated).toBe(true);
     expect(result.tokenBudget.needed).toBe(true);
+    expect(result.turnBudget.needed).toBe(true);
   });
 });

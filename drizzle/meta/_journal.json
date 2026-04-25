@@ -36,6 +36,20 @@
       "when": 1777151643238,
       "tag": "0004_smart_starbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1777151894594,
+      "tag": "0005_square_the_phantom",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1777152073155,
+      "tag": "0006_eager_rocket_raccoon",
+      "breakpoints": true
     }
   ]
 }

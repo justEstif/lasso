@@ -12,9 +12,14 @@ describe('tui dashboard renderer', () => {
     const db = new Database(':memory:');
     runMigrations(db);
     createEntry(db, {
+      affected_paths: JSON.stringify([]),
+      category: null,
       description: 'Prefer Bun.write for file writes',
       detector_version: 'test',
       proposed_form: null,
+      referenced_date: null,
+      relative_offset: null,
+      severity: 'medium',
       source_excerpt: null,
       status: 'proposed',
     });

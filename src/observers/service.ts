@@ -1,13 +1,14 @@
 export interface ObserverLifecycleGates {
   saturation?: SaturationGateResult;
   tokenBudget: TokenBudgetGateResult;
+  turnBudget?: TurnBudgetGateResult;
 }
 
 export interface ObserverLifecycleInput<T> {
   force?: boolean;
   gates: ObserverLifecycleGates;
   observe: () => Promise<T> | T;
-  persistProgress?: (observedTokens: number) => Promise<void> | void;
+  persistProgress?: (progress: ObserverProgress) => Promise<void> | void;
 }
 
 export type ObserverLifecycleResult<T> =
@@ -20,6 +21,11 @@ export type ObserverLifecycleResult<T> =
       gates: ObserverLifecycleGates;
       skipped: true;
     };
+
+export interface ObserverProgress {
+  observedTokens: number;
+  observedTurns?: number;
+}
 
 export interface SaturationGateInput {
   activeCount: number;
@@ -40,6 +46,20 @@ export interface TokenBudgetGateInput {
 
 export interface TokenBudgetGateResult {
   currentTokens: number;
+  lastObserved: number;
+  needed: boolean;
+  threshold: number;
+  unobserved: number;
+}
+
+export interface TurnBudgetGateInput {
+  currentTurns: number;
+  lastObservedTurns: number;
+  thresholdTurns: number;
+}
+
+export interface TurnBudgetGateResult {
+  currentTurns: number;
   lastObserved: number;
   needed: boolean;
   threshold: number;
@@ -85,6 +105,24 @@ export function checkTokenBudget(input: TokenBudgetGateInput): TokenBudgetGateRe
 }
 
 /**
+ * Computes whether an observer has enough new turns to justify an LLM call.
+ */
+export function checkTurnBudget(input: TurnBudgetGateInput): TurnBudgetGateResult {
+  const currentTurns = Math.max(0, input.currentTurns);
+  const lastObserved = Math.max(0, input.lastObservedTurns);
+  const threshold = Math.max(0, input.thresholdTurns);
+  const unobserved = Math.max(0, currentTurns - lastObserved);
+
+  return {
+    currentTurns,
+    lastObserved,
+    needed: unobserved >= threshold,
+    threshold,
+    unobserved,
+  };
+}
+
+/**
  * Runs the shared observer lifecycle: gate, observe, then persist progress.
  *
  * Observer-specific code supplies the expensive observation work and the persistence
@@ -94,12 +132,16 @@ export function checkTokenBudget(input: TokenBudgetGateInput): TokenBudgetGateRe
 export async function runObserverLifecycle<T>(
   input: ObserverLifecycleInput<T>,
 ): Promise<ObserverLifecycleResult<T>> {
-  if (!input.force && !input.gates.tokenBudget.needed) {
+  const turnBudgetAllowsObservation = input.gates.turnBudget?.needed ?? false;
+  if (!input.force && !input.gates.tokenBudget.needed && !turnBudgetAllowsObservation) {
     return { gates: input.gates, skipped: true };
   }
 
   const result = await input.observe();
-  await input.persistProgress?.(input.gates.tokenBudget.currentTokens);
+  await input.persistProgress?.({
+    observedTokens: input.gates.tokenBudget.currentTokens,
+    observedTurns: input.gates.turnBudget?.currentTurns,
+  });
 
   return { gates: input.gates, result, skipped: false };
 }

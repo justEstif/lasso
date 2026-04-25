@@ -10,13 +10,18 @@ import {
   getRecurrences,
   listActiveEntries,
   listEntries,
-  recordLintObservationTokenCount,
+  recordLintObservationProgress,
   recordScanRun,
   resolveEntryId,
   updateEntryStatus,
 } from './db';
 import { applyDetectorResult, parseDetectorResult } from './detector.ts';
-import { checkSaturation, checkTokenBudget, runObserverLifecycle } from '../service.ts';
+import {
+  checkSaturation,
+  checkTokenBudget,
+  checkTurnBudget,
+  runObserverLifecycle,
+} from '../service.ts';
 import { estimateTokens } from '../memory/tokens.ts';
 import { buildLintDetectorPrompt } from './prompt.ts';
 import { runDetector } from './runner.ts';
@@ -29,17 +34,21 @@ interface LintScanOptions {
   input?: string;
   printPrompt?: boolean;
   tokens?: string;
+  turns?: string;
 }
 
 export interface LintScanGateResult {
   saturation: ReturnType<typeof checkSaturation>;
   tokenBudget: ReturnType<typeof checkTokenBudget>;
+  turnBudget: ReturnType<typeof checkTurnBudget>;
 }
 
 export function checkShouldScanLint(
   activeCount: number,
   currentTokens: number,
   lastObservedTokens: number,
+  currentTurns: number,
+  lastObservedTurns: number,
   config: LassoConfig,
 ): LintScanGateResult {
   const lintConfig = config.observers.lint;
@@ -51,6 +60,11 @@ export function checkShouldScanLint(
       lastObservedTokens,
       thresholdTokens: lintConfig.scanThresholdTokens,
     }),
+    turnBudget: checkTurnBudget({
+      currentTurns,
+      lastObservedTurns,
+      thresholdTurns: lintConfig.scanThresholdTurns,
+    }),
   };
 }
 
@@ -58,10 +72,14 @@ export async function handleLintScan(db: Database, options: LintScanOptions, con
   const conversation = await readConversation(options);
   const activeEntries = listActiveEntries(db, 50);
   const observedTokens = options.tokens ? Number(options.tokens) : estimateTokens(conversation);
+  const observedTurns = options.turns ? Number(options.turns) : estimateTurns(conversation);
+  const observationState = getLintObservationState(db);
   const gates = checkShouldScanLint(
     activeEntries.length,
     observedTokens,
-    getLintObservationState(db),
+    observationState.lastObservedTokens,
+    observedTurns,
+    observationState.lastObservedTurns,
     config,
   );
 
@@ -76,11 +94,22 @@ export async function handleLintScan(db: Database, options: LintScanOptions, con
     force: options.force,
     gates,
     observe: async () => applyLintDetector(db, await readDetectorOutput(prompt, options, config)),
-    persistProgress: (tokens) => recordLintObservationTokenCount(db, tokens),
+    persistProgress: (progress) => {
+      recordLintObservationProgress(db, {
+        observedTokens: progress.observedTokens,
+        observedTurns: progress.observedTurns ?? observedTurns,
+      });
+    },
   });
 
   if (observation.skipped) {
-    console.log(JSON.stringify({ ...observation.gates.tokenBudget, skipped: true }));
+    console.log(
+      JSON.stringify({
+        skipped: true,
+        tokenBudget: observation.gates.tokenBudget,
+        turnBudget: observation.gates.turnBudget,
+      }),
+    );
     return;
   }
 
@@ -100,6 +129,12 @@ async function readConversation(options: LintScanOptions) {
   if (options.input) return Bun.file(options.input).text();
   if (hasReadableStdin()) return Bun.stdin.text();
   return '';
+}
+
+function estimateTurns(conversation: string) {
+  const speakerTurns = conversation.match(/^(user|assistant|system)\s*:/gim);
+  if (speakerTurns) return speakerTurns.length;
+  return conversation.trim().length > 0 ? 1 : 0;
 }
 
 function hasReadableStdin() {
@@ -142,6 +177,10 @@ export function handleLintShow(db: Database, id: string) {
   console.log(`Created: ${entry.created_at}`);
   console.log(`Updated: ${entry.updated_at}`);
   console.log(`Detector Version: ${entry.detector_version}`);
+  console.log(`Category: ${entry.category ?? 'uncategorized'}`);
+  console.log(`Severity: ${entry.severity ?? 'medium'}`);
+  console.log(`Affected Paths: ${formatAffectedPaths(entry.affected_paths)}`);
+  console.log(`Temporal: ${formatLintTemporal(entry)}`);
   console.log(`\nDescription:\n${entry.description}`);
 
   if (entry.proposed_form) {
@@ -156,7 +195,7 @@ export function handleLintShow(db: Database, id: string) {
   if (recurrences.length > 0) {
     console.log(`\nRecurrences (${recurrences.length}):`);
     for (const r of recurrences) {
-      console.log(`- [${r.observed_at}] ${r.note}`);
+      console.log(`- [${r.observed_at}] ${formatLintTemporal(r)} ${r.note}`);
     }
   }
 }
@@ -187,6 +226,36 @@ function canTransition(from: LintStatus, to: LintStatus) {
   };
 
   return allowed[from].includes(to);
+}
+
+function formatAffectedPaths(value: null | string) {
+  const paths = parseAffectedPaths(value);
+  return paths.length > 0 ? paths.join(', ') : 'none';
+}
+
+function formatLintTemporal(entry: {
+  referenced_date: null | string;
+  relative_offset: null | number;
+}) {
+  const parts: string[] = [];
+  if (entry.referenced_date) parts.push(`ref:${entry.referenced_date}`);
+  if (entry.relative_offset != null) {
+    const sign = entry.relative_offset >= 0 ? '+' : '';
+    parts.push(`rel:${sign}${entry.relative_offset}d`);
+  }
+  return parts.length > 0 ? `[${parts.join(', ')}]` : 'none';
+}
+
+function parseAffectedPaths(value: null | string): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((path): path is string => typeof path === 'string')
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 function resolveIdOrExit(db: Database, id: string) {
@@ -231,7 +300,11 @@ export function handleLintExport(db: Database, opts: { format: string }) {
   for (const entry of entries) {
     console.log(`## ${entry.id.slice(0, 8)} (${entry.status})`);
     console.log(`**Created:** ${entry.created_at}`);
-    console.log(`**Updated:** ${entry.updated_at}\n`);
+    console.log(`**Updated:** ${entry.updated_at}`);
+    console.log(`**Category:** ${entry.category ?? 'uncategorized'}`);
+    console.log(`**Severity:** ${entry.severity ?? 'medium'}`);
+    console.log(`**Affected paths:** ${formatAffectedPaths(entry.affected_paths)}`);
+    console.log(`**Temporal:** ${formatLintTemporal(entry)}\n`);
     console.log(`### Description\n${entry.description}\n`);
 
     if (entry.proposed_form) {
@@ -246,7 +319,7 @@ export function handleLintExport(db: Database, opts: { format: string }) {
     if (recurrences.length > 0) {
       console.log(`### Recurrences`);
       for (const r of recurrences) {
-        console.log(`- **${r.observed_at}**: ${r.note}`);
+        console.log(`- **${r.observed_at}**: ${formatLintTemporal(r)} ${r.note}`);
       }
       console.log('');
     }

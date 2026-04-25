@@ -1,11 +1,16 @@
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 export const lintEntries = sqliteTable('lint_entries', {
+  affected_paths: text('affected_paths'),
+  category: text('category'),
   created_at: text('created_at').notNull(),
   description: text('description').notNull(),
   detector_version: text('detector_version').notNull(),
   id: text('id').primaryKey(),
   proposed_form: text('proposed_form'),
+  referenced_date: text('referenced_date'),
+  relative_offset: integer('relative_offset'),
+  severity: text('severity'),
   source_excerpt: text('source_excerpt'),
   status: text('status').notNull(),
   updated_at: text('updated_at').notNull(),
@@ -18,6 +23,8 @@ export const lintRecurrences = sqliteTable('lint_recurrences', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   note: text('note').notNull(),
   observed_at: text('observed_at').notNull(),
+  referenced_date: text('referenced_date'),
+  relative_offset: integer('relative_offset'),
 });
 
 export const lintScanRuns = sqliteTable('lint_scan_runs', {
@@ -31,6 +38,7 @@ export const lintScanRuns = sqliteTable('lint_scan_runs', {
 export const lintObservationState = sqliteTable('lint_observation_state', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   last_observed_tokens: integer('last_observed_tokens').notNull().default(0),
+  last_observed_turns: integer('last_observed_turns').notNull().default(0),
   updated_at: text('updated_at').notNull(),
 });
 

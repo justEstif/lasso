@@ -6,9 +6,14 @@ import { addRecurrence, createEntry, getEntry } from './db.ts';
 import { LINT_DETECTOR_VERSION } from './prompt.ts';
 
 const DetectorEntrySchema = v.object({
+  affected_paths: v.optional(v.array(v.pipe(v.string(), v.trim(), v.nonEmpty()))),
+  category: v.optional(v.nullable(v.pipe(v.string(), v.trim(), v.nonEmpty()))),
   description: v.pipe(v.string(), v.trim(), v.nonEmpty()),
   matches_existing_id: v.nullable(v.pipe(v.string(), v.trim())),
   proposed_form: v.optional(v.nullable(v.string())),
+  referenced_date: v.optional(v.nullable(v.pipe(v.string(), v.trim(), v.nonEmpty()))),
+  relative_offset: v.optional(v.nullable(v.number())),
+  severity: v.optional(v.nullable(v.picklist(['high', 'low', 'medium']))),
   source_excerpt: v.optional(v.nullable(v.string())),
 });
 
@@ -40,9 +45,14 @@ export function applyDetectorResult(db: Database, result: DetectorResult): ScanS
     }
 
     createEntry(db, {
+      affected_paths: JSON.stringify(entry.affected_paths ?? []),
+      category: entry.category ?? null,
       description: entry.description,
       detector_version: LINT_DETECTOR_VERSION,
       proposed_form: entry.proposed_form ?? null,
+      referenced_date: entry.referenced_date ?? null,
+      relative_offset: entry.relative_offset ?? null,
+      severity: entry.severity ?? 'medium',
       source_excerpt: entry.source_excerpt ?? null,
       status: 'proposed',
     });
@@ -77,5 +87,9 @@ function addMatchedRecurrence(db: Database, entry: DetectorEntry) {
     throw new Error(`Matched lint entry ${entry.matches_existing_id} not found`);
   }
 
-  addRecurrence(db, existing.id, entry.source_excerpt ?? entry.description);
+  addRecurrence(db, existing.id, {
+    note: entry.source_excerpt ?? entry.description,
+    referencedDate: entry.referenced_date ?? null,
+    relativeOffset: entry.relative_offset ?? null,
+  });
 }

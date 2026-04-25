@@ -22,9 +22,14 @@ describe('lint detector entry creation', () => {
       JSON.stringify({
         entries: [
           {
+            affected_paths: ['src/app/page.tsx'],
+            category: 'framework-migration',
             description: 'Avoid antd imports in migrated pages',
             matches_existing_id: null,
             proposed_form: 'no-restricted-imports: antd',
+            referenced_date: '2026-04-25',
+            relative_offset: -1,
+            severity: 'high',
             source_excerpt: 'stop pulling Form.Item from antd',
           },
         ],
@@ -40,6 +45,11 @@ describe('lint detector entry creation', () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]?.status).toBe('proposed');
     expect(entries[0]?.detector_version).toBe('lint-rubric-v1');
+    expect(entries[0]?.category).toBe('framework-migration');
+    expect(entries[0]?.severity).toBe('high');
+    expect(entries[0]?.affected_paths).toBe(JSON.stringify(['src/app/page.tsx']));
+    expect(entries[0]?.referenced_date).toBe('2026-04-25');
+    expect(entries[0]?.relative_offset).toBe(-1);
   });
 });
 
@@ -91,6 +101,8 @@ describe('lint detector recurrence handling', () => {
         {
           description: 'Avoid antd imports in migrated pages',
           matches_existing_id: existing?.id ?? '',
+          referenced_date: '2026-04-26',
+          relative_offset: 0,
           source_excerpt: 'again, no antd here',
         },
       ],
@@ -98,7 +110,11 @@ describe('lint detector recurrence handling', () => {
       reasoning: 'Duplicate signal.',
     });
 
+    const recurrences = getRecurrences(db, existing?.id ?? '');
+
     expect(summary.recurrences).toBe(1);
-    expect(getRecurrences(db, existing?.id ?? '')).toHaveLength(1);
+    expect(recurrences).toHaveLength(1);
+    expect(recurrences[0]?.referenced_date).toBe('2026-04-26');
+    expect(recurrences[0]?.relative_offset).toBe(0);
   });
 });

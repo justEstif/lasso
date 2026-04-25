@@ -94,6 +94,8 @@ describe('lint CLI threshold integration', () => {
       'detector.json',
       '--tokens',
       '10',
+      '--turns',
+      '1',
     ]);
     const forced = await runLasso(cwd, [
       'lint',
@@ -102,6 +104,8 @@ describe('lint CLI threshold integration', () => {
       'detector.json',
       '--tokens',
       '10',
+      '--turns',
+      '1',
       '--force',
     ]);
 

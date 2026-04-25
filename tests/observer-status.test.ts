@@ -29,9 +29,14 @@ function addMemorySnapshot(db: Database) {
 
 function addStatusedLintEntry(db: Database, status: 'accepted' | 'proposed') {
   createEntry(db, {
+    affected_paths: JSON.stringify([]),
+    category: null,
     description: status === 'proposed' ? 'Prefer Bun APIs' : 'Remove compatibility aliases',
     detector_version: 'test',
     proposed_form: null,
+    referenced_date: null,
+    relative_offset: null,
+    severity: 'medium',
     source_excerpt: null,
     status,
   });
