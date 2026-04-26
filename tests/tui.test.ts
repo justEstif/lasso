@@ -1,15 +1,15 @@
-import { Database } from 'bun:sqlite';
 import { describe, expect, test } from 'bun:test';
 
 import { defaultConfig } from '../src/config/load.ts';
-import { runMigrations } from '../src/db/migrations.ts';
+import { getMemoryDb } from '../src/db/index';
+import { runMigrations } from '../src/db/migrations';
 import { createEntry } from '../src/observers/lint/db.ts';
 import { createSnapshot } from '../src/observers/memory/db.ts';
 import { renderDashboard } from '../src/tui/dashboard.tsx';
 
 describe('tui dashboard renderer', () => {
   test('renders observer status and recent records', () => {
-    const db = new Database(':memory:');
+    const db = getMemoryDb();
     runMigrations(db);
     createEntry(db, {
       affected_paths: JSON.stringify([]),

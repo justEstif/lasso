@@ -1,7 +1,7 @@
-import { Database } from 'bun:sqlite';
 import { Box, render, renderToString, Text, useApp, useInput } from 'ink';
 import React, { useMemo, useState } from 'react';
 
+import type { LassoDb } from '../db/index.ts';
 import type { LassoConfig } from '../config/load.ts';
 
 import { buildLintStatusModel } from '../observers/lint/status.ts';
@@ -34,7 +34,7 @@ interface DashboardModel {
   updatedAt: string;
 }
 
-export async function handleTui(db: Database, config: LassoConfig, options: TuiOptions) {
+export async function handleTui(db: LassoDb, config: LassoConfig, options: TuiOptions) {
   if (options.once || !process.stdout.isTTY) {
     console.log(renderDashboard(db, config));
     return;
@@ -44,11 +44,11 @@ export async function handleTui(db: Database, config: LassoConfig, options: TuiO
   await instance.waitUntilExit();
 }
 
-export function renderDashboard(db: Database, config: LassoConfig) {
+export function renderDashboard(db: LassoDb, config: LassoConfig) {
   return renderToString(<Dashboard model={buildDashboardModel(db, config)} />);
 }
 
-function buildDashboardModel(db: Database, config: LassoConfig): DashboardModel {
+function buildDashboardModel(db: LassoDb, config: LassoConfig): DashboardModel {
   const lint = buildLintStatusModel(db, config);
   const memory = buildMemoryStatusModel(db);
 
@@ -106,7 +106,7 @@ function Dashboard({ model }: { model: DashboardModel }) {
   );
 }
 
-function DashboardApp({ config, db }: { config: LassoConfig; db: Database }) {
+function DashboardApp({ config, db }: { config: LassoConfig; db: LassoDb }) {
   const { exit } = useApp();
   const [refreshToken, setRefreshToken] = useState(0);
   const model = useMemo(() => buildDashboardModel(db, config), [config, db, refreshToken]);

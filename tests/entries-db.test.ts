@@ -1,9 +1,9 @@
-import { Database } from 'bun:sqlite';
 import { describe, expect, test } from 'bun:test';
 
 import type { ParsedEntry } from '../src/observers/memory/parser.ts';
 
-import { runMigrations } from '../src/db/migrations.ts';
+import { getMemoryDb } from '../src/db/index';
+import { runMigrations } from '../src/db/migrations';
 import {
   countEntries,
   createEntries,
@@ -14,7 +14,7 @@ import {
 } from '../src/observers/memory/db.ts';
 
 function entryDb() {
-  const db = new Database(':memory:');
+  const db = getMemoryDb();
   runMigrations(db);
   return db;
 }
@@ -48,7 +48,7 @@ function sampleEntries(): ParsedEntry[] {
   ];
 }
 
-function seedEntries(db: Database) {
+function seedEntries(db: ReturnType<typeof entryDb>) {
   const snapshot = createSnapshot(db, { content: 'test', scope: 'thread' });
   createEntries(db, { entries: sampleEntries(), snapshotId: snapshot.id });
   return snapshot;

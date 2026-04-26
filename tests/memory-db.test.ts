@@ -1,7 +1,7 @@
-import { Database } from 'bun:sqlite';
 import { describe, expect, test } from 'bun:test';
 
-import { runMigrations } from '../src/db/migrations.ts';
+import { getMemoryDb } from '../src/db/index';
+import { runMigrations } from '../src/db/migrations';
 import {
   checkShouldReflect,
   countReflections,
@@ -15,7 +15,7 @@ import {
   searchSnapshots,
 } from '../src/observers/memory/db.ts';
 
-function expectMemoryRecords(db: Database) {
+function expectMemoryRecords(db: ReturnType<typeof memoryDb>) {
   expect(countSnapshots(db)).toBe(1);
   expect(countReflections(db)).toBe(1);
   expect(listSnapshots(db)[0]?.content).toBe('Remember this convention.');
@@ -23,7 +23,7 @@ function expectMemoryRecords(db: Database) {
 }
 
 function memoryDb() {
-  const db = new Database(':memory:');
+  const db = getMemoryDb();
   runMigrations(db);
   return db;
 }

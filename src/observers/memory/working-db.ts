@@ -1,6 +1,6 @@
-import { Database } from 'bun:sqlite';
 import { and, eq, isNull } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/bun-sqlite';
+
+import type { LassoDb } from '../../db/index.ts';
 
 import { workingMemory } from '../../db/schema.ts';
 
@@ -35,38 +35,37 @@ export function getDefaultTemplate(): string {
 }
 
 export function getWorkingMemory(
-  db: Database,
+  db: LassoDb,
   options?: WorkingMemoryScope,
 ): null | WorkingMemoryRecord {
   const conditions = buildKeyMatch(options);
-  const query = drizzle(db).select().from(workingMemory);
+  const query = db.select().from(workingMemory);
   if (conditions) query.where(conditions);
 
   return query.get() ?? null;
 }
 
-export function listAllWorkingMemory(db: Database): WorkingMemoryRecord[] {
-  return drizzle(db).select().from(workingMemory).all();
+export function listAllWorkingMemory(db: LassoDb): WorkingMemoryRecord[] {
+  return db.select().from(workingMemory).all();
 }
 
-export function removeWorkingMemory(db: Database, id: string): boolean {
-  const existing = drizzle(db).select().from(workingMemory).where(eq(workingMemory.id, id)).get();
+export function removeWorkingMemory(db: LassoDb, id: string): boolean {
+  const existing = db.select().from(workingMemory).where(eq(workingMemory.id, id)).get();
   if (!existing) return false;
 
-  drizzle(db).delete(workingMemory).where(eq(workingMemory.id, id)).run();
+  db.delete(workingMemory).where(eq(workingMemory.id, id)).run();
   return true;
 }
 
 export function upsertWorkingMemory(
-  db: Database,
+  db: LassoDb,
   input: UpsertWorkingMemoryInput,
 ): WorkingMemoryRecord {
   const existing = findExisting(db, input);
   const now = new Date().toISOString();
 
   if (existing) {
-    drizzle(db)
-      .update(workingMemory)
+    db.update(workingMemory)
       .set({ content: input.content, updated_at: now })
       .where(eq(workingMemory.id, existing.id))
       .run();
@@ -81,7 +80,7 @@ export function upsertWorkingMemory(
     updated_at: now,
   };
 
-  drizzle(db).insert(workingMemory).values(record).run();
+  db.insert(workingMemory).values(record).run();
   return record;
 }
 
@@ -101,8 +100,8 @@ function buildKeyMatch(options?: WorkingMemoryScope) {
   return and(...conditions);
 }
 
-function findExisting(db: Database, input: WorkingMemoryScope): null | WorkingMemoryRecord {
+function findExisting(db: LassoDb, input: WorkingMemoryScope): null | WorkingMemoryRecord {
   const conditions = buildKeyMatch(input);
   if (!conditions) return null;
-  return drizzle(db).select().from(workingMemory).where(conditions).get() ?? null;
+  return db.select().from(workingMemory).where(conditions).get() ?? null;
 }

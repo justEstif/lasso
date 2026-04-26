@@ -1,6 +1,6 @@
-import type { Database } from 'bun:sqlite';
-
 import * as v from 'valibot';
+
+import type { LassoDb } from '../../db/index.ts';
 
 import { addRecurrence, createEntry, getEntry } from './db.ts';
 import { LINT_DETECTOR_VERSION } from './prompt.ts';
@@ -32,7 +32,7 @@ export interface ScanSummary {
   skipped: number;
 }
 
-export function applyDetectorResult(db: Database, result: DetectorResult): ScanSummary {
+export function applyDetectorResult(db: LassoDb, result: DetectorResult): ScanSummary {
   const summary = { created: 0, recurrences: 0, skipped: 0 };
 
   if (!result.found_opportunity) return summary;
@@ -81,7 +81,7 @@ export function extractJsonObject(input: string): string {
   throw new SyntaxError('Detector output did not contain a JSON object');
 }
 
-function addMatchedRecurrence(db: Database, entry: DetectorEntry) {
+function addMatchedRecurrence(db: LassoDb, entry: DetectorEntry) {
   const existing = getEntry(db, entry.matches_existing_id ?? '');
   if (!existing) {
     throw new Error(`Matched lint entry ${entry.matches_existing_id} not found`);

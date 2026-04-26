@@ -1,16 +1,14 @@
-import { Database } from 'bun:sqlite';
-import { afterEach, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 
 import { defaultConfig } from '../src/config/load.ts';
-import { runMigrations } from '../src/db/migrations.ts';
+import { getMemoryDb } from '../src/db/index';
+import { runMigrations } from '../src/db/migrations';
 import { createEntry } from '../src/observers/lint/db.ts';
 import { buildLintStatusModel } from '../src/observers/lint/status.ts';
 import { createEntries, createSnapshot } from '../src/observers/memory/db.ts';
 import { buildMemoryStatusModel } from '../src/observers/memory/status.ts';
 
-const openDbs: Database[] = [];
-
-function addMemorySnapshot(db: Database) {
+function addMemorySnapshot(db: ReturnType<typeof testDb>) {
   const snapshot = createSnapshot(db, { content: '- 🔴 [decision] Use Bun', scope: 'thread' });
   createEntries(db, {
     entries: [
@@ -27,7 +25,7 @@ function addMemorySnapshot(db: Database) {
   });
 }
 
-function addStatusedLintEntry(db: Database, status: 'accepted' | 'proposed') {
+function addStatusedLintEntry(db: ReturnType<typeof testDb>, status: 'accepted' | 'proposed') {
   createEntry(db, {
     affected_paths: JSON.stringify([]),
     category: null,
@@ -43,15 +41,10 @@ function addStatusedLintEntry(db: Database, status: 'accepted' | 'proposed') {
 }
 
 function testDb() {
-  const db = new Database(':memory:');
-  openDbs.push(db);
+  const db = getMemoryDb();
   runMigrations(db);
   return db;
 }
-
-afterEach(() => {
-  for (const db of openDbs.splice(0)) db.close();
-});
 
 describe('observer status models', () => {
   test('builds lint status once for CLI and TUI surfaces', () => {

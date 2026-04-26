@@ -1,6 +1,6 @@
-import { Database } from 'bun:sqlite';
 import { and, asc, desc, eq, gte, isNull, lte, sql } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/bun-sqlite';
+
+import type { LassoDb } from '../../db/index.ts';
 
 import type { ObservationPriority, ParsedEntry } from './parser.ts';
 
@@ -56,7 +56,7 @@ export interface ShouldReflectResult {
 }
 
 export function checkShouldReflect(
-  db: Database,
+  db: LassoDb,
   scope: MemoryScope,
   threshold: number,
 ): ShouldReflectResult {
@@ -64,31 +64,31 @@ export function checkShouldReflect(
   return { lastObserved, needed: lastObserved >= threshold, threshold };
 }
 
-export function countEntries(db: Database): number {
-  const row = drizzle(db)
+export function countEntries(db: LassoDb): number {
+  const row = db
     .select({ count: sql<number>`count(*)` })
     .from(observationEntries)
     .get();
   return Number(row?.count ?? 0);
 }
 
-export function countReflections(db: Database): number {
-  const row = drizzle(db)
+export function countReflections(db: LassoDb): number {
+  const row = db
     .select({ count: sql<number>`count(*)` })
     .from(memoryReflections)
     .get();
   return Number(row?.count ?? 0);
 }
 
-export function countSnapshots(db: Database): number {
-  const row = drizzle(db)
+export function countSnapshots(db: LassoDb): number {
+  const row = db
     .select({ count: sql<number>`count(*)` })
     .from(memorySnapshots)
     .get();
   return Number(row?.count ?? 0);
 }
 
-export function createEntries(db: Database, input: CreateEntriesInput): ObservationEntry[] {
+export function createEntries(db: LassoDb, input: CreateEntriesInput): ObservationEntry[] {
   const now = new Date().toISOString();
   const rows = input.entries.map((entry) => ({
     category: entry.category,
@@ -103,13 +103,13 @@ export function createEntries(db: Database, input: CreateEntriesInput): Observat
   }));
 
   for (const row of rows) {
-    drizzle(db).insert(observationEntries).values(row).run();
+    db.insert(observationEntries).values(row).run();
   }
 
   return rows;
 }
 
-export function createReflection(db: Database, input: CreateReflectionInput): MemoryReflection {
+export function createReflection(db: LassoDb, input: CreateReflectionInput): MemoryReflection {
   const now = new Date().toISOString();
   const reflection = {
     consolidated_content: input.consolidatedContent,
@@ -118,11 +118,11 @@ export function createReflection(db: Database, input: CreateReflectionInput): Me
     source_snapshot_ids: JSON.stringify(input.sourceSnapshotIds),
   };
 
-  drizzle(db).insert(memoryReflections).values(reflection).run();
+  db.insert(memoryReflections).values(reflection).run();
   return reflection;
 }
 
-export function createSnapshot(db: Database, input: CreateSnapshotInput): MemorySnapshot {
+export function createSnapshot(db: LassoDb, input: CreateSnapshotInput): MemorySnapshot {
   const existing = findDuplicateSnapshot(db, input.content);
   if (existing) return recordSnapshotSeen(db, existing.id);
 
@@ -139,12 +139,12 @@ export function createSnapshot(db: Database, input: CreateSnapshotInput): Memory
     superseded_by: null,
   };
 
-  drizzle(db).insert(memorySnapshots).values(snapshot).run();
+  db.insert(memorySnapshots).values(snapshot).run();
   return snapshot as MemorySnapshot;
 }
 
-export function getObservationState(db: Database, scope: MemoryScope): number {
-  const row = drizzle(db)
+export function getObservationState(db: LassoDb, scope: MemoryScope): number {
+  const row = db
     .select()
     .from(memoryObservationState)
     .where(eq(memoryObservationState.scope, scope))
@@ -152,7 +152,7 @@ export function getObservationState(db: Database, scope: MemoryScope): number {
   return row?.last_observed_tokens ?? 0;
 }
 
-export function listEntries(db: Database, options: EntryFilterOptions = {}): ObservationEntry[] {
+export function listEntries(db: LassoDb, options: EntryFilterOptions = {}): ObservationEntry[] {
   const { after, before, limit = 100, priority, sortField, sortOrder } = options;
   const conditions = [];
 
@@ -163,7 +163,7 @@ export function listEntries(db: Database, options: EntryFilterOptions = {}): Obs
   const column = observationEntries[sortField ?? 'observed_at'];
   const order = sortOrder === 'asc' ? asc(column) : desc(column);
 
-  const query = drizzle(db)
+  const query = db
     .select()
     .from(observationEntries)
     .orderBy(order, desc(observationEntries.created_at));
@@ -175,8 +175,8 @@ export function listEntries(db: Database, options: EntryFilterOptions = {}): Obs
   return query.limit(limit).all();
 }
 
-export function listEntriesBySnapshot(db: Database, snapshotId: string): ObservationEntry[] {
-  return drizzle(db)
+export function listEntriesBySnapshot(db: LassoDb, snapshotId: string): ObservationEntry[] {
+  return db
     .select()
     .from(observationEntries)
     .where(eq(observationEntries.snapshot_id, snapshotId))
@@ -184,8 +184,8 @@ export function listEntriesBySnapshot(db: Database, snapshotId: string): Observa
     .all();
 }
 
-export function listReflections(db: Database, limit = 20): MemoryReflection[] {
-  return drizzle(db)
+export function listReflections(db: LassoDb, limit = 20): MemoryReflection[] {
+  return db
     .select()
     .from(memoryReflections)
     .orderBy(desc(memoryReflections.created_at))
@@ -193,8 +193,8 @@ export function listReflections(db: Database, limit = 20): MemoryReflection[] {
     .all();
 }
 
-export function listSnapshots(db: Database, limit = 20): MemorySnapshot[] {
-  return drizzle(db)
+export function listSnapshots(db: LassoDb, limit = 20): MemorySnapshot[] {
+  return db
     .select()
     .from(memorySnapshots)
     .where(isNull(memorySnapshots.superseded_by))
@@ -208,12 +208,8 @@ export function parseSourceSnapshotIds(reflection: MemoryReflection): string[] {
   return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
 }
 
-export function recordObservationTokenCount(
-  db: Database,
-  scope: MemoryScope,
-  tokens: number,
-): void {
-  const existing = drizzle(db)
+export function recordObservationTokenCount(db: LassoDb, scope: MemoryScope, tokens: number): void {
+  const existing = db
     .select()
     .from(memoryObservationState)
     .where(eq(memoryObservationState.scope, scope))
@@ -222,21 +218,19 @@ export function recordObservationTokenCount(
   const now = new Date().toISOString();
 
   if (existing) {
-    drizzle(db)
-      .update(memoryObservationState)
+    db.update(memoryObservationState)
       .set({ last_observed_tokens: tokens, updated_at: now })
       .where(eq(memoryObservationState.scope, scope))
       .run();
   } else {
-    drizzle(db)
-      .insert(memoryObservationState)
+    db.insert(memoryObservationState)
       .values({ last_observed_tokens: tokens, scope, updated_at: now })
       .run();
   }
 }
 
 export function searchEntries(
-  db: Database,
+  db: LassoDb,
   query: string,
   options: EntryFilterOptions = {},
 ): ObservationEntry[] {
@@ -251,7 +245,7 @@ export function searchEntries(
     .map((result) => result.entry);
 }
 
-export function searchSnapshots(db: Database, query: string, limit = 5): MemorySnapshot[] {
+export function searchSnapshots(db: LassoDb, query: string, limit = 5): MemorySnapshot[] {
   const queryTokens = new Set(query.toLowerCase().match(/[a-z0-9][a-z0-9_.:/-]{2,}/g));
   return listSnapshots(db, 100)
     .map((snapshot) => ({ score: scoreSnapshot(snapshot.content, queryTokens), snapshot }))
@@ -261,9 +255,9 @@ export function searchSnapshots(db: Database, query: string, limit = 5): MemoryS
     .map((result) => result.snapshot);
 }
 
-function findDuplicateSnapshot(db: Database, content: string): MemorySnapshot | null {
+function findDuplicateSnapshot(db: LassoDb, content: string): MemorySnapshot | null {
   const hash = normalizedMemoryHash(content);
-  const exact = drizzle(db)
+  const exact = db
     .select()
     .from(memorySnapshots)
     .where(eq(memorySnapshots.normalized_hash, hash))
@@ -281,16 +275,15 @@ function findDuplicateSnapshot(db: Database, content: string): MemorySnapshot | 
   );
 }
 
-function recordSnapshotSeen(db: Database, id: string): MemorySnapshot {
-  const existing = drizzle(db)
+function recordSnapshotSeen(db: LassoDb, id: string): MemorySnapshot {
+  const existing = db
     .select()
     .from(memorySnapshots)
     .where(eq(memorySnapshots.id, id))
     .get() as MemorySnapshot;
   const now = new Date().toISOString();
 
-  drizzle(db)
-    .update(memorySnapshots)
+  db.update(memorySnapshots)
     .set({ last_seen_at: now, seen_count: (existing.seen_count ?? 1) + 1 })
     .where(eq(memorySnapshots.id, id))
     .run();

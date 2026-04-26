@@ -1,7 +1,7 @@
-import { Database } from 'bun:sqlite';
 import { describe, expect, test } from 'bun:test';
 
-import { runMigrations } from '../src/db/migrations.ts';
+import { getMemoryDb } from '../src/db/index';
+import { runMigrations } from '../src/db/migrations';
 import {
   getDefaultTemplate,
   getWorkingMemory,
@@ -11,7 +11,7 @@ import {
 } from '../src/observers/memory/working-db.ts';
 
 function workingDb() {
-  const db = new Database(':memory:');
+  const db = getMemoryDb();
   runMigrations(db);
   return db;
 }

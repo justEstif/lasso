@@ -1,6 +1,6 @@
-import { Database } from 'bun:sqlite';
 import { fstatSync } from 'node:fs';
 
+import type { LassoDb } from '../../db/index.ts';
 import type { LassoConfig } from '../../config/load.ts';
 import type { LintStatus } from './db';
 
@@ -68,7 +68,7 @@ export function checkShouldScanLint(
   };
 }
 
-export async function handleLintScan(db: Database, options: LintScanOptions, config: LassoConfig) {
+export async function handleLintScan(db: LassoDb, options: LintScanOptions, config: LassoConfig) {
   const conversation = await readConversation(options);
   const activeEntries = listActiveEntries(db, 50);
   const observedTokens = options.tokens ? Number(options.tokens) : estimateTokens(conversation);
@@ -118,7 +118,7 @@ export async function handleLintScan(db: Database, options: LintScanOptions, con
   );
 }
 
-function applyLintDetector(db: Database, detectorOutput: string) {
+function applyLintDetector(db: LassoDb, detectorOutput: string) {
   const result = parseDetectorResult(detectorOutput);
   const summary = applyDetectorResult(db, result);
   recordScanRun(db, summary);
@@ -155,7 +155,7 @@ async function readDetectorOutput(prompt: string, options: LintScanOptions, conf
   });
 }
 
-export function handleLintList(db: Database, opts: { status?: LintStatus }) {
+export function handleLintList(db: LassoDb, opts: { status?: LintStatus }) {
   const entries = listEntries(db, opts.status);
 
   if (entries.length === 0) {
@@ -168,7 +168,7 @@ export function handleLintList(db: Database, opts: { status?: LintStatus }) {
   }
 }
 
-export function handleLintShow(db: Database, id: string) {
+export function handleLintShow(db: LassoDb, id: string) {
   const entry = getEntry(db, resolveIdOrExit(db, id));
   if (!entry) process.exit(1);
 
@@ -200,7 +200,7 @@ export function handleLintShow(db: Database, id: string) {
   }
 }
 
-export function handleLintTransition(db: Database, id: string, status: LintStatus) {
+export function handleLintTransition(db: LassoDb, id: string, status: LintStatus) {
   const resolvedId = resolveIdOrExit(db, id);
   const entry = getEntry(db, resolvedId);
   if (!entry) process.exit(1);
@@ -258,7 +258,7 @@ function parseAffectedPaths(value: null | string): string[] {
   }
 }
 
-function resolveIdOrExit(db: Database, id: string) {
+function resolveIdOrExit(db: LassoDb, id: string) {
   try {
     return resolveEntryId(db, id);
   } catch (error) {
@@ -267,7 +267,7 @@ function resolveIdOrExit(db: Database, id: string) {
   }
 }
 
-export function handleLintStatus(db: Database, config: LassoConfig) {
+export function handleLintStatus(db: LassoDb, config: LassoConfig) {
   const status = buildLintStatusModel(db, config);
 
   console.log('Lint Observer Status:');
@@ -283,7 +283,7 @@ export function handleLintStatus(db: Database, config: LassoConfig) {
   console.log(`Last scan: ${status.lastScan?.scanned_at ?? 'never'}`);
 }
 
-export function handleLintExport(db: Database, opts: { format: string }) {
+export function handleLintExport(db: LassoDb, opts: { format: string }) {
   if (opts.format !== 'markdown') {
     console.error('Only markdown export is supported in MVP.');
     process.exit(1);

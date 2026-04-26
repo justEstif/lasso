@@ -1,4 +1,4 @@
-import type { Database } from 'bun:sqlite';
+import type { LassoDb } from '../../db/index.ts';
 
 import type { LassoConfig } from '../../config/load.ts';
 import type { LintEntry, LintScanRun, LintStatus } from './db.ts';
@@ -21,7 +21,7 @@ export interface LintStatusModel {
  * Keeping status semantics here prevents every surface from re-learning which
  * states count as stale, throttled, or active.
  */
-export function buildLintStatusModel(db: Database, config: LassoConfig): LintStatusModel {
+export function buildLintStatusModel(db: LassoDb, config: LassoConfig): LintStatusModel {
   const entries = listEntries(db);
   const counts = countLintStatuses(entries);
   const lintConfig = config.observers.lint;
