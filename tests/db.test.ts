@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdir, rm } from 'node:fs/promises';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -12,31 +12,33 @@ describe('Database Persistence', () => {
   // Use OS temp dir to avoid findProjectRoot walking up into the real project
   const tmpDir = path.join(tmpdir(), 'lasso-test-db');
 
-  test('getDb creates database directory', async () => {
-    await rm(tmpDir, { force: true, recursive: true });
-    await mkdir(tmpDir, { recursive: true });
+  test('getDb creates database directory', () => {
+    rmSync(tmpDir, { force: true, recursive: true });
+    mkdirSync(tmpDir, { recursive: true });
 
     closeDb();
     const db = getDb(tmpDir);
     expect(db).toBeTruthy();
     closeDb();
 
-    await rm(tmpDir, { force: true, recursive: true });
+    rmSync(tmpDir, { force: true, recursive: true });
   });
 
-  test('resolveLassoPaths finds ancestor project from subdirectories', async () => {
-    await rm(tmpDir, { force: true, recursive: true });
+  test('resolveLassoPaths finds ancestor project from subdirectories', () => {
+    rmSync(tmpDir, { force: true, recursive: true });
     const projectRoot = path.join(tmpDir, 'project');
     const nested = path.join(projectRoot, 'src', 'nested');
-    await mkdir(path.join(projectRoot, '.lasso'), { recursive: true });
-    await mkdir(nested, { recursive: true });
-    await Bun.write(path.join(projectRoot, '.lasso', 'config.json'), '{}');
+    mkdirSync(path.join(projectRoot, '.lasso'), { recursive: true });
+    mkdirSync(nested, { recursive: true });
+    writeFileSync(path.join(projectRoot, '.lasso', 'config.json'), '{}');
+
+    expect(existsSync(path.join(projectRoot, '.lasso', 'config.json'))).toBe(true);
 
     const { lassoDir, projectRoot: resolvedRoot } = resolveLassoPaths(nested);
     expect(resolvedRoot).toBe(projectRoot);
     expect(lassoDir).toBe(path.join(projectRoot, '.lasso'));
 
-    await rm(tmpDir, { force: true, recursive: true });
+    rmSync(tmpDir, { force: true, recursive: true });
   });
 });
 
