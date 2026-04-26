@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { mkdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { closeDb, getDb, getMemoryDb } from '../src/db/index';
@@ -7,7 +8,8 @@ import { runMigrations } from '../src/db/migrations';
 import { lintScanRuns, memorySnapshots } from '../src/db/schema';
 
 describe('Database Persistence', () => {
-  const tmpDir = path.join(process.cwd(), 'tests', '.tmp_test_db');
+  // Use OS temp dir to avoid findProjectRoot walking up into the real project
+  const tmpDir = path.join(tmpdir(), 'lasso-test-db');
 
   test('getDb creates database directory', async () => {
     await rm(tmpDir, { force: true, recursive: true });
@@ -21,7 +23,6 @@ describe('Database Persistence', () => {
   });
 
   test('getDb uses ancestor project database from subdirectories', async () => {
-    closeDb(); // Ensure no cached singleton from prior tests
     await rm(tmpDir, { force: true, recursive: true });
     const projectRoot = path.join(tmpDir, 'project');
     const nested = path.join(projectRoot, 'src', 'nested');
@@ -29,12 +30,16 @@ describe('Database Persistence', () => {
     await mkdir(nested, { recursive: true });
     await Bun.write(path.join(projectRoot, '.lasso', 'config.json'), '{}');
 
+    closeDb();
     const db = getDb(nested);
     expect(db).toBeTruthy();
     closeDb();
 
-    expect(await Bun.file(path.join(projectRoot, '.lasso', 'db.sqlite')).exists()).toBe(true);
-    expect(await Bun.file(path.join(nested, '.lasso', 'db.sqlite')).exists()).toBe(false);
+    // The DB file should exist at the project root, not the nested directory
+    const dbAtProject = await Bun.file(path.join(projectRoot, '.lasso', 'db.sqlite')).exists();
+    const dbAtNested = await Bun.file(path.join(nested, '.lasso', 'db.sqlite')).exists();
+    expect(dbAtProject).toBe(true);
+    expect(dbAtNested).toBe(false);
 
     await rm(tmpDir, { force: true, recursive: true });
   });
