@@ -5,6 +5,7 @@
     "": {
       "name": "lasso",
       "dependencies": {
+        "@electric-sql/pglite": "^0.4.4",
         "commander": "^14.0.3",
         "drizzle-orm": "^0.45.2",
         "ink": "^7.0.1",
@@ -13,7 +14,6 @@
       },
       "devDependencies": {
         "@eslint/js": "^10.0.1",
-        "@types/better-sqlite3": "^7.6.13",
         "@types/bun": "latest",
         "@types/react": "^19.2.14",
         "drizzle-kit": "^0.31.10",
@@ -34,6 +34,8 @@
     "@babel/helper-validator-identifier": ["@babel/helper-validator-identifier@7.28.5", "", {}, "sha512-qSs4ifwzKJSV39ucNjsvc6WVHs6b7S03sOh2OcHF9UHfVPqWWALUsNUVzhSBiItjRZoLHx7nIarVjqKVusUZ1Q=="],
 
     "@drizzle-team/brocli": ["@drizzle-team/brocli@0.10.2", "", {}, "sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w=="],
+
+    "@electric-sql/pglite": ["@electric-sql/pglite@0.4.4", "", {}, "sha512-g/6CWAJ4XOkObWCWAQ2IReZD8VvsDy3poRHSKvpRR2F96F8WJ3HVbjpso3gN7l0q6QPPgvxSSpl/qo5k8a7mkQ=="],
 
     "@esbuild-kit/core-utils": ["@esbuild-kit/core-utils@3.3.2", "", { "dependencies": { "esbuild": "~0.18.20", "source-map-support": "^0.5.21" } }, "sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ=="],
 

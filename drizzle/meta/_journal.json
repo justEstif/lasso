@@ -1,54 +1,12 @@
 {
   "version": "7",
-  "dialect": "sqlite",
+  "dialect": "postgresql",
   "entries": [
     {
       "idx": 0,
-      "version": "6",
-      "when": 1777130824454,
-      "tag": "0000_initial_schema",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1777132125163,
-      "tag": "0001_windy_mentallo",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1777133476312,
-      "tag": "0002_mixed_stranger",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1777149656895,
-      "tag": "0003_robust_star_brand",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "6",
-      "when": 1777151643238,
-      "tag": "0004_smart_starbolt",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "6",
-      "when": 1777151894594,
-      "tag": "0005_square_the_phantom",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "6",
-      "when": 1777152073155,
-      "tag": "0006_eager_rocket_raccoon",
+      "version": "7",
+      "when": 1777152755748,
+      "tag": "0000_complex_doctor_strange",
       "breakpoints": true
     }
   ]

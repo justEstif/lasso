@@ -1,6 +1,6 @@
+import type { LassoDb } from '../../db/index.ts';
 import { fstatSync } from 'node:fs';
 
-import type { LassoDb } from '../../db/index.ts';
 import type { LassoConfig } from '../../config/load.ts';
 import type { LintStatus } from './db';
 
@@ -36,7 +36,6 @@ interface LintScanOptions {
   tokens?: string;
   turns?: string;
 }
-
 export interface LintScanGateResult {
   saturation: ReturnType<typeof checkSaturation>;
   tokenBudget: ReturnType<typeof checkTokenBudget>;
@@ -52,7 +51,6 @@ export function checkShouldScanLint(
   config: LassoConfig,
 ): LintScanGateResult {
   const lintConfig = config.observers.lint;
-
   return {
     saturation: checkSaturation({ activeCount, limit: lintConfig.throttleLimit }),
     tokenBudget: checkTokenBudget({
@@ -70,10 +68,10 @@ export function checkShouldScanLint(
 
 export async function handleLintScan(db: LassoDb, options: LintScanOptions, config: LassoConfig) {
   const conversation = await readConversation(options);
-  const activeEntries = listActiveEntries(db, 50);
+  const activeEntries = await listActiveEntries(db, 50);
   const observedTokens = options.tokens ? Number(options.tokens) : estimateTokens(conversation);
   const observedTurns = options.turns ? Number(options.turns) : estimateTurns(conversation);
-  const observationState = getLintObservationState(db);
+  const observationState = await getLintObservationState(db);
   const gates = checkShouldScanLint(
     activeEntries.length,
     observedTokens,
@@ -82,7 +80,6 @@ export async function handleLintScan(db: LassoDb, options: LintScanOptions, conf
     observationState.lastObservedTurns,
     config,
   );
-
   const prompt = buildLintDetectorPrompt(conversation, activeEntries);
 
   if (options.printPrompt) {
@@ -94,12 +91,11 @@ export async function handleLintScan(db: LassoDb, options: LintScanOptions, conf
     force: options.force,
     gates,
     observe: async () => applyLintDetector(db, await readDetectorOutput(prompt, options, config)),
-    persistProgress: (progress) => {
+    persistProgress: (progress) =>
       recordLintObservationProgress(db, {
         observedTokens: progress.observedTokens,
         observedTurns: progress.observedTurns ?? observedTurns,
-      });
-    },
+      }),
   });
 
   if (observation.skipped) {
@@ -112,31 +108,27 @@ export async function handleLintScan(db: LassoDb, options: LintScanOptions, conf
     );
     return;
   }
-
   console.log(
     `Lint scan complete: ${observation.result.created} created, ${observation.result.recurrences} recurrences, ${observation.result.skipped} skipped.`,
   );
 }
 
-function applyLintDetector(db: LassoDb, detectorOutput: string) {
+async function applyLintDetector(db: LassoDb, detectorOutput: string) {
   const result = parseDetectorResult(detectorOutput);
-  const summary = applyDetectorResult(db, result);
-  recordScanRun(db, summary);
+  const summary = await applyDetectorResult(db, result);
+  await recordScanRun(db, summary);
   return summary;
 }
-
 async function readConversation(options: LintScanOptions) {
   if (options.input) return Bun.file(options.input).text();
   if (hasReadableStdin()) return Bun.stdin.text();
   return '';
 }
-
 function estimateTurns(conversation: string) {
   const speakerTurns = conversation.match(/^(user|assistant|system)\s*:/gim);
   if (speakerTurns) return speakerTurns.length;
   return conversation.trim().length > 0 ? 1 : 0;
 }
-
 function hasReadableStdin() {
   try {
     const stat = fstatSync(0);
@@ -145,33 +137,27 @@ function hasReadableStdin() {
     return false;
   }
 }
-
 async function readDetectorOutput(prompt: string, options: LintScanOptions, config: LassoConfig) {
   if (options.detectorOutput) return Bun.file(options.detectorOutput).text();
-
   return runDetector({
     command: options.detectorCommand ?? config.observers.lint.detectorCommand,
     prompt,
   });
 }
 
-export function handleLintList(db: LassoDb, opts: { status?: LintStatus }) {
-  const entries = listEntries(db, opts.status);
-
+export async function handleLintList(db: LassoDb, opts: { status?: LintStatus }) {
+  const entries = await listEntries(db, opts.status);
   if (entries.length === 0) {
     console.log('No lint entries found.');
     return;
   }
-
-  for (const entry of entries) {
+  for (const entry of entries)
     console.log(`[${entry.id.slice(0, 8)}] ${entry.status.toUpperCase()}: ${entry.description}`);
-  }
 }
 
-export function handleLintShow(db: LassoDb, id: string) {
-  const entry = getEntry(db, resolveIdOrExit(db, id));
+export async function handleLintShow(db: LassoDb, id: string) {
+  const entry = await getEntry(db, await resolveIdOrExit(db, id));
   if (!entry) process.exit(1);
-
   console.log(`ID: ${entry.id}`);
   console.log(`Status: ${entry.status}`);
   console.log(`Created: ${entry.created_at}`);
@@ -182,41 +168,30 @@ export function handleLintShow(db: LassoDb, id: string) {
   console.log(`Affected Paths: ${formatAffectedPaths(entry.affected_paths)}`);
   console.log(`Temporal: ${formatLintTemporal(entry)}`);
   console.log(`\nDescription:\n${entry.description}`);
-
-  if (entry.proposed_form) {
-    console.log(`\nProposed Form:\n${entry.proposed_form}`);
-  }
-
-  if (entry.source_excerpt) {
-    console.log(`\nSource Excerpt:\n${entry.source_excerpt}`);
-  }
-
-  const recurrences = getRecurrences(db, entry.id);
+  if (entry.proposed_form) console.log(`\nProposed Form:\n${entry.proposed_form}`);
+  if (entry.source_excerpt) console.log(`\nSource Excerpt:\n${entry.source_excerpt}`);
+  const recurrences = await getRecurrences(db, entry.id);
   if (recurrences.length > 0) {
     console.log(`\nRecurrences (${recurrences.length}):`);
-    for (const r of recurrences) {
+    for (const r of recurrences)
       console.log(`- [${r.observed_at}] ${formatLintTemporal(r)} ${r.note}`);
-    }
   }
 }
 
-export function handleLintTransition(db: LassoDb, id: string, status: LintStatus) {
-  const resolvedId = resolveIdOrExit(db, id);
-  const entry = getEntry(db, resolvedId);
+export async function handleLintTransition(db: LassoDb, id: string, status: LintStatus) {
+  const resolvedId = await resolveIdOrExit(db, id);
+  const entry = await getEntry(db, resolvedId);
   if (!entry) process.exit(1);
-
   if (!canTransition(entry.status, status)) {
     console.error(`Cannot transition lint entry ${resolvedId} from ${entry.status} to ${status}.`);
     process.exit(1);
   }
-
-  updateEntryStatus(db, resolvedId, status);
+  await updateEntryStatus(db, resolvedId, status);
   console.log(`Lint entry ${resolvedId} transitioned from ${entry.status} to ${status}.`);
 }
 
 function canTransition(from: LintStatus, to: LintStatus) {
   if (from === to) return true;
-
   const allowed: Record<LintStatus, LintStatus[]> = {
     accepted: ['deferred', 'implemented'],
     deferred: ['accepted', 'rejected'],
@@ -224,15 +199,12 @@ function canTransition(from: LintStatus, to: LintStatus) {
     proposed: ['accepted', 'deferred', 'rejected'],
     rejected: [],
   };
-
   return allowed[from].includes(to);
 }
-
-function formatAffectedPaths(value: null | string) {
+function formatAffectedPaths(value: null | string | string[]) {
   const paths = parseAffectedPaths(value);
   return paths.length > 0 ? paths.join(', ') : 'none';
 }
-
 function formatLintTemporal(entry: {
   referenced_date: null | string;
   relative_offset: null | number;
@@ -245,9 +217,9 @@ function formatLintTemporal(entry: {
   }
   return parts.length > 0 ? `[${parts.join(', ')}]` : 'none';
 }
-
-function parseAffectedPaths(value: null | string): string[] {
+function parseAffectedPaths(value: null | string | string[]): string[] {
   if (!value) return [];
+  if (Array.isArray(value)) return value.filter((path): path is string => typeof path === 'string');
   try {
     const parsed = JSON.parse(value) as unknown;
     return Array.isArray(parsed)
@@ -257,19 +229,17 @@ function parseAffectedPaths(value: null | string): string[] {
     return [];
   }
 }
-
-function resolveIdOrExit(db: LassoDb, id: string) {
+async function resolveIdOrExit(db: LassoDb, id: string) {
   try {
-    return resolveEntryId(db, id);
+    return await resolveEntryId(db, id);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 }
 
-export function handleLintStatus(db: LassoDb, config: LassoConfig) {
-  const status = buildLintStatusModel(db, config);
-
+export async function handleLintStatus(db: LassoDb, config: LassoConfig) {
+  const status = await buildLintStatusModel(db, config);
   console.log('Lint Observer Status:');
   console.log(`- Proposed: ${status.counts.proposed}`);
   console.log(`- Accepted: ${status.counts.accepted}`);
@@ -283,20 +253,17 @@ export function handleLintStatus(db: LassoDb, config: LassoConfig) {
   console.log(`Last scan: ${status.lastScan?.scanned_at ?? 'never'}`);
 }
 
-export function handleLintExport(db: LassoDb, opts: { format: string }) {
+export async function handleLintExport(db: LassoDb, opts: { format: string }) {
   if (opts.format !== 'markdown') {
     console.error('Only markdown export is supported in MVP.');
     process.exit(1);
   }
-
-  const entries = listEntries(db);
+  const entries = await listEntries(db);
   if (entries.length === 0) {
     console.log('# Lint Observer Export\n\nNo entries found.');
     return;
   }
-
   console.log('# Lint Observer Export\n');
-
   for (const entry of entries) {
     console.log(`## ${entry.id.slice(0, 8)} (${entry.status})`);
     console.log(`**Created:** ${entry.created_at}`);
@@ -306,24 +273,17 @@ export function handleLintExport(db: LassoDb, opts: { format: string }) {
     console.log(`**Affected paths:** ${formatAffectedPaths(entry.affected_paths)}`);
     console.log(`**Temporal:** ${formatLintTemporal(entry)}\n`);
     console.log(`### Description\n${entry.description}\n`);
-
-    if (entry.proposed_form) {
+    if (entry.proposed_form)
       console.log(`### Proposed Form\n\`\`\`\n${entry.proposed_form}\n\`\`\`\n`);
-    }
-
-    if (entry.source_excerpt) {
+    if (entry.source_excerpt)
       console.log(`### Source Excerpt\n> ${entry.source_excerpt.replace(/\n/g, '\n> ')}\n`);
-    }
-
-    const recurrences = getRecurrences(db, entry.id);
+    const recurrences = await getRecurrences(db, entry.id);
     if (recurrences.length > 0) {
-      console.log(`### Recurrences`);
-      for (const r of recurrences) {
+      console.log('### Recurrences');
+      for (const r of recurrences)
         console.log(`- **${r.observed_at}**: ${formatLintTemporal(r)} ${r.note}`);
-      }
       console.log('');
     }
-
     console.log('---\n');
   }
 }

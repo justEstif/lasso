@@ -1,1 +1,0 @@
-ALTER TABLE `lint_observation_state` ADD `last_observed_turns` integer DEFAULT 0 NOT NULL;

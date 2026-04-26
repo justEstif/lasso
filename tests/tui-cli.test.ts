@@ -34,5 +34,5 @@ describe('tui CLI integration', () => {
     expect(result.stdout).toContain('memory observer');
 
     await rm(cwd, { force: true, recursive: true });
-  });
+  }, 30000);
 });

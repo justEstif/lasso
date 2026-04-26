@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { getMemoryDb } from '../src/db/index';
-import { runMigrations } from '../src/db/migrations';
+import { testDb } from './helpers/db.ts';
 import { getRecurrences, listEntries } from '../src/observers/lint/db.ts';
 import {
   applyDetectorResult,
@@ -9,15 +8,13 @@ import {
   parseDetectorResult,
 } from '../src/observers/lint/detector.ts';
 
-function createMigratedDatabase() {
-  const db = getMemoryDb();
-  runMigrations(db);
-  return db;
+async function createMigratedDatabase() {
+  return testDb();
 }
 
 describe('lint detector entry creation', () => {
-  test('creates proposed lint entries from detector JSON', () => {
-    const db = createMigratedDatabase();
+  test('creates proposed lint entries from detector JSON', async () => {
+    const db = await createMigratedDatabase();
     const result = parseDetectorResult(
       JSON.stringify({
         entries: [
@@ -38,8 +35,8 @@ describe('lint detector entry creation', () => {
       }),
     );
 
-    const summary = applyDetectorResult(db, result);
-    const entries = listEntries(db);
+    const summary = await applyDetectorResult(db, result);
+    const entries = await listEntries(db);
 
     expect(summary.created).toBe(1);
     expect(entries).toHaveLength(1);
@@ -47,14 +44,14 @@ describe('lint detector entry creation', () => {
     expect(entries[0]?.detector_version).toBe('lint-rubric-v1');
     expect(entries[0]?.category).toBe('framework-migration');
     expect(entries[0]?.severity).toBe('high');
-    expect(entries[0]?.affected_paths).toBe(JSON.stringify(['src/app/page.tsx']));
+    expect(entries[0]?.affected_paths).toEqual(['src/app/page.tsx']);
     expect(entries[0]?.referenced_date).toBe('2026-04-25');
     expect(entries[0]?.relative_offset).toBe(-1);
   });
 });
 
 describe('lint detector output parsing', () => {
-  test('extracts JSON from fenced detector output', () => {
+  test('extracts JSON from fenced detector output', async () => {
     const json = extractJsonObject(
       'Here is the result:\n```json\n{"found_opportunity":false,"reasoning":"none","entries":[]}\n```',
     );
@@ -63,7 +60,7 @@ describe('lint detector output parsing', () => {
     expect(result.found_opportunity).toBe(false);
   });
 
-  test('rejects invalid detector output with schema errors', () => {
+  test('rejects invalid detector output with schema errors', async () => {
     expect(() => parseDetectorResult('{"reasoning":"missing fields","entries":[]}')).toThrow();
     expect(() =>
       parseDetectorResult('{"found_opportunity":true,"reasoning":"ok","entries":{}}'),
@@ -81,9 +78,9 @@ describe('lint detector output parsing', () => {
 });
 
 describe('lint detector recurrence handling', () => {
-  test('adds recurrence for matched existing entry', () => {
-    const db = createMigratedDatabase();
-    const created = applyDetectorResult(db, {
+  test('adds recurrence for matched existing entry', async () => {
+    const db = await createMigratedDatabase();
+    const created = await applyDetectorResult(db, {
       entries: [
         {
           description: 'Avoid antd imports in migrated pages',
@@ -95,8 +92,8 @@ describe('lint detector recurrence handling', () => {
     });
     expect(created.created).toBe(1);
 
-    const existing = listEntries(db)[0];
-    const summary = applyDetectorResult(db, {
+    const existing = (await listEntries(db))[0];
+    const summary = await applyDetectorResult(db, {
       entries: [
         {
           description: 'Avoid antd imports in migrated pages',
@@ -110,7 +107,7 @@ describe('lint detector recurrence handling', () => {
       reasoning: 'Duplicate signal.',
     });
 
-    const recurrences = getRecurrences(db, existing?.id ?? '');
+    const recurrences = await getRecurrences(db, existing?.id ?? '');
 
     expect(summary.recurrences).toBe(1);
     expect(recurrences).toHaveLength(1);

@@ -34,41 +34,43 @@ export function getDefaultTemplate(): string {
   return DEFAULT_TEMPLATE;
 }
 
-export function getWorkingMemory(
+export async function getWorkingMemory(
   db: LassoDb,
   options?: WorkingMemoryScope,
-): null | WorkingMemoryRecord {
+): Promise<null | WorkingMemoryRecord> {
   const conditions = buildKeyMatch(options);
   const query = db.select().from(workingMemory);
   if (conditions) query.where(conditions);
 
-  return query.get() ?? null;
+  return (await query.limit(1))[0] ?? null;
 }
 
-export function listAllWorkingMemory(db: LassoDb): WorkingMemoryRecord[] {
-  return db.select().from(workingMemory).all();
+export async function listAllWorkingMemory(db: LassoDb): Promise<WorkingMemoryRecord[]> {
+  return await db.select().from(workingMemory);
 }
 
-export function removeWorkingMemory(db: LassoDb, id: string): boolean {
-  const existing = db.select().from(workingMemory).where(eq(workingMemory.id, id)).get();
+export async function removeWorkingMemory(db: LassoDb, id: string): Promise<boolean> {
+  const existing = (
+    await db.select().from(workingMemory).where(eq(workingMemory.id, id)).limit(1)
+  )[0];
   if (!existing) return false;
 
-  db.delete(workingMemory).where(eq(workingMemory.id, id)).run();
+  await db.delete(workingMemory).where(eq(workingMemory.id, id));
   return true;
 }
 
-export function upsertWorkingMemory(
+export async function upsertWorkingMemory(
   db: LassoDb,
   input: UpsertWorkingMemoryInput,
-): WorkingMemoryRecord {
-  const existing = findExisting(db, input);
+): Promise<WorkingMemoryRecord> {
+  const existing = await findExisting(db, input);
   const now = new Date().toISOString();
 
   if (existing) {
-    db.update(workingMemory)
+    await db
+      .update(workingMemory)
       .set({ content: input.content, updated_at: now })
-      .where(eq(workingMemory.id, existing.id))
-      .run();
+      .where(eq(workingMemory.id, existing.id));
     return { ...existing, content: input.content, updated_at: now };
   }
 
@@ -80,7 +82,7 @@ export function upsertWorkingMemory(
     updated_at: now,
   };
 
-  db.insert(workingMemory).values(record).run();
+  await db.insert(workingMemory).values(record);
   return record;
 }
 
@@ -100,8 +102,11 @@ function buildKeyMatch(options?: WorkingMemoryScope) {
   return and(...conditions);
 }
 
-function findExisting(db: LassoDb, input: WorkingMemoryScope): null | WorkingMemoryRecord {
+async function findExisting(
+  db: LassoDb,
+  input: WorkingMemoryScope,
+): Promise<null | WorkingMemoryRecord> {
   const conditions = buildKeyMatch(input);
   if (!conditions) return null;
-  return db.select().from(workingMemory).where(conditions).get() ?? null;
+  return (await db.select().from(workingMemory).where(conditions).limit(1))[0] ?? null;
 }

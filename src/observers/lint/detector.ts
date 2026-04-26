@@ -1,6 +1,6 @@
-import * as v from 'valibot';
-
 import type { LassoDb } from '../../db/index.ts';
+
+import * as v from 'valibot';
 
 import { addRecurrence, createEntry, getEntry } from './db.ts';
 import { LINT_DETECTOR_VERSION } from './prompt.ts';
@@ -32,20 +32,23 @@ export interface ScanSummary {
   skipped: number;
 }
 
-export function applyDetectorResult(db: LassoDb, result: DetectorResult): ScanSummary {
+export async function applyDetectorResult(
+  db: LassoDb,
+  result: DetectorResult,
+): Promise<ScanSummary> {
   const summary = { created: 0, recurrences: 0, skipped: 0 };
 
   if (!result.found_opportunity) return summary;
 
   for (const entry of result.entries) {
     if (entry.matches_existing_id) {
-      addMatchedRecurrence(db, entry);
+      await addMatchedRecurrence(db, entry);
       summary.recurrences++;
       continue;
     }
 
-    createEntry(db, {
-      affected_paths: JSON.stringify(entry.affected_paths ?? []),
+    await createEntry(db, {
+      affected_paths: entry.affected_paths ?? [],
       category: entry.category ?? null,
       description: entry.description,
       detector_version: LINT_DETECTOR_VERSION,
@@ -81,13 +84,13 @@ export function extractJsonObject(input: string): string {
   throw new SyntaxError('Detector output did not contain a JSON object');
 }
 
-function addMatchedRecurrence(db: LassoDb, entry: DetectorEntry) {
-  const existing = getEntry(db, entry.matches_existing_id ?? '');
+async function addMatchedRecurrence(db: LassoDb, entry: DetectorEntry) {
+  const existing = await getEntry(db, entry.matches_existing_id ?? '');
   if (!existing) {
     throw new Error(`Matched lint entry ${entry.matches_existing_id} not found`);
   }
 
-  addRecurrence(db, existing.id, {
+  await addRecurrence(db, existing.id, {
     note: entry.source_excerpt ?? entry.description,
     referencedDate: entry.referenced_date ?? null,
     relativeOffset: entry.relative_offset ?? null,

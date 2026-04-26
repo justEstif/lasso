@@ -6,7 +6,7 @@ import { buildLintDetectorPrompt, LINT_DETECTOR_VERSION } from '../src/observers
 
 function entry(overrides: Partial<LintEntry> = {}): LintEntry {
   return {
-    affected_paths: JSON.stringify(['src/app/page.tsx']),
+    affected_paths: ['src/app/page.tsx'],
     category: 'framework-migration',
     created_at: '2026-04-24T00:00:00.000Z',
     description: 'Avoid antd imports in migrated pages',

@@ -1,10 +1,9 @@
 import type { LassoDb } from '../../db/index.ts';
-
 import type { LassoConfig } from '../../config/load.ts';
-
-import { checkTokenBudget } from '../service.ts';
+import type { ObservationEntry, MemoryReflection } from './db.ts';
 import type { ObservationPriority } from './parser.ts';
 
+import { checkTokenBudget } from '../service.ts';
 import {
   checkShouldReflect,
   createEntries,
@@ -35,7 +34,6 @@ export interface ShouldObserveResult {
   threshold: number;
   unobserved: number;
 }
-
 interface MemoryContextOptions {
   after?: string;
   before?: string;
@@ -44,26 +42,22 @@ interface MemoryContextOptions {
   query?: string;
   sort?: string;
 }
-
 interface MemoryExportOptions {
   after?: string;
   before?: string;
   priority?: string;
 }
-
 interface MemoryObserveOptions {
   content?: string;
   input?: string;
   scope?: 'resource' | 'thread';
   tokens?: string;
 }
-
 interface MemoryReflectOptions {
   content?: string;
   input?: string;
   limit?: string;
 }
-
 interface MemoryWorkingOptions {
   edit?: boolean;
   init?: boolean;
@@ -73,45 +67,42 @@ interface MemoryWorkingOptions {
   thread_id?: string;
 }
 
-export function checkShouldObserve(
+export async function checkShouldObserve(
   db: LassoDb,
   currentTokens: number,
   config: LassoConfig,
-): ShouldObserveResult {
+): Promise<ShouldObserveResult> {
   const scope = config.observers.memory.scope;
-  const threshold = config.observers.memory.observationThreshold;
   return checkTokenBudget({
     currentTokens,
-    lastObservedTokens: getObservationState(db, scope),
-    thresholdTokens: threshold,
+    lastObservedTokens: await getObservationState(db, scope),
+    thresholdTokens: config.observers.memory.observationThreshold,
   });
 }
 
-export function handleMemoryContext(db: LassoDb, options: MemoryContextOptions) {
+export async function handleMemoryContext(db: LassoDb, options: MemoryContextOptions) {
   const filter = buildEntryFilter(options);
   const entries = options.query
-    ? searchEntries(db, options.query, { ...filter, limit: Number(options.limit ?? 10) })
-    : listEntries(db, { ...filter, limit: Number(options.limit ?? 10) });
-
+    ? await searchEntries(db, options.query, { ...filter, limit: Number(options.limit ?? 10) })
+    : await listEntries(db, { ...filter, limit: Number(options.limit ?? 10) });
   console.log('# Lasso Memory Context\n');
   if (entries.length === 0) {
     console.log('No relevant memory found.');
     return;
   }
-
   for (const entry of entries) {
     const emoji = priorityEmoji(entry.priority as ObservationPriority);
     const category = entry.category ? `[${entry.category}] ` : '';
-    const temporal = formatTemporalAnchor(entry);
-    console.log(`- ${emoji} ${entry.observed_at}: ${category}${temporal}${entry.content}`);
+    console.log(
+      `- ${emoji} ${entry.observed_at}: ${category}${formatTemporalAnchor(entry)}${entry.content}`,
+    );
   }
 }
 
-export function handleMemoryExport(db: LassoDb, options: MemoryExportOptions = {}) {
+export async function handleMemoryExport(db: LassoDb, options: MemoryExportOptions = {}) {
   const filter = buildEntryFilter(options);
-  const entries = listEntries(db, { ...filter, limit: 200 });
-  const reflections = listReflections(db, 100);
-
+  const entries = await listEntries(db, { ...filter, limit: 200 });
+  const reflections = await listReflections(db, 100);
   console.log('# Memory Observer Export\n');
   renderReflections(reflections);
   renderEntries(entries);
@@ -127,16 +118,12 @@ export async function handleMemoryObserve(
     console.error('memory observe needs --content <text>, --input <path>, or stdin content.');
     process.exit(1);
   }
-
   const scope = options.scope ?? config.observers.memory.scope;
-  const snapshot = createSnapshot(db, { content: content.trim(), scope });
-
+  const snapshot = await createSnapshot(db, { content: content.trim(), scope });
   const parsed = parseObservationEntries(content.trim());
-  const entries = createEntries(db, { entries: parsed, snapshotId: snapshot.id });
-
+  const entries = await createEntries(db, { entries: parsed, snapshotId: snapshot.id });
   const observedTokens = options.tokens ? Number(options.tokens) : estimateTokens(content);
-  recordObservationTokenCount(db, scope, observedTokens);
-
+  await recordObservationTokenCount(db, scope, observedTokens);
   console.log(
     `Memory snapshot ${snapshot.id} created with ${entries.length} entries (${snapshot.scope}).`,
   );
@@ -148,37 +135,38 @@ export async function handleMemoryReflect(db: LassoDb, options: MemoryReflectOpt
     console.error('memory reflect needs --content <text>, --input <path>, or stdin content.');
     process.exit(1);
   }
-
-  const sourceSnapshotIds = listSnapshots(db, Number(options.limit ?? 20)).map(
+  const sourceSnapshotIds = (await listSnapshots(db, Number(options.limit ?? 20))).map(
     (snapshot) => snapshot.id,
   );
-  const reflection = createReflection(db, {
+  const reflection = await createReflection(db, {
     consolidatedContent: content.trim(),
     sourceSnapshotIds,
   });
-
   console.log(
     `Memory reflection ${reflection.id} created from ${sourceSnapshotIds.length} snapshots.`,
   );
 }
 
-export function handleMemoryShouldObserve(db: LassoDb, currentTokens: number, config: LassoConfig) {
-  const result = checkShouldObserve(db, currentTokens, config);
+export async function handleMemoryShouldObserve(
+  db: LassoDb,
+  currentTokens: number,
+  config: LassoConfig,
+) {
+  const result = await checkShouldObserve(db, currentTokens, config);
   console.log(JSON.stringify(result));
   process.exit(result.needed ? 0 : 1);
 }
-
-export function handleMemoryShouldReflect(db: LassoDb, config: LassoConfig) {
-  const scope = config.observers.memory.scope;
-  const threshold = config.observers.memory.reflectionThreshold;
-  const result = checkShouldReflect(db, scope, threshold);
+export async function handleMemoryShouldReflect(db: LassoDb, config: LassoConfig) {
+  const result = await checkShouldReflect(
+    db,
+    config.observers.memory.scope,
+    config.observers.memory.reflectionThreshold,
+  );
   console.log(JSON.stringify(result));
   process.exit(result.needed ? 0 : 1);
 }
-
-export function handleMemoryStatus(db: LassoDb) {
-  const status = buildMemoryStatusModel(db);
-
+export async function handleMemoryStatus(db: LassoDb) {
+  const status = await buildMemoryStatusModel(db);
   console.log('Memory Observer Status:');
   console.log(`- Snapshots: ${status.snapshots}`);
   console.log(`- Entries: ${status.entries}`);
@@ -186,8 +174,7 @@ export function handleMemoryStatus(db: LassoDb) {
   console.log(`Last snapshot: ${status.lastSnapshot}`);
   console.log(`Last reflection: ${status.lastReflection}`);
 }
-
-export function handleMemoryWorking(db: LassoDb, options: MemoryWorkingOptions) {
+export async function handleMemoryWorking(db: LassoDb, options: MemoryWorkingOptions) {
   if (options.edit) return handleWorkingEdit(db, options);
   if (options.init) return handleWorkingInit(db, options);
   if (options.reset) return handleWorkingReset(db, options);
@@ -199,7 +186,6 @@ function buildEntryFilter(options: MemoryContextOptions | MemoryExportOptions) {
   const sort = (options as MemoryContextOptions).sort?.split(':') as
     | ['created_at' | 'observed_at' | 'referenced_date', 'asc' | 'desc']
     | undefined;
-
   return {
     after: options.after,
     before: options.before,
@@ -208,7 +194,6 @@ function buildEntryFilter(options: MemoryContextOptions | MemoryExportOptions) {
     sortOrder: sort?.[1],
   };
 }
-
 function formatTemporalAnchor(entry: {
   referenced_date: null | string;
   relative_offset: null | number;
@@ -221,36 +206,31 @@ function formatTemporalAnchor(entry: {
   }
   return parts.length > 0 ? `[${parts.join(', ')}] ` : '';
 }
-
-function groupByCategory(entries: ReturnType<typeof listEntries>) {
-  const groups = new Map<string, typeof entries>();
-
+function groupByCategory(entries: ObservationEntry[]) {
+  const groups = new Map<string, ObservationEntry[]>();
   for (const entry of entries) {
     const existing = groups.get(entry.category) ?? [];
     existing.push(entry);
     groups.set(entry.category, existing);
   }
-
   return groups;
 }
 
-function handleWorkingEdit(db: LassoDb, options: MemoryWorkingOptions) {
+async function handleWorkingEdit(db: LassoDb, options: MemoryWorkingOptions) {
   const content = options.stdin?.trim();
   if (!content) {
     console.error('memory working --edit needs content via stdin.');
     process.exit(1);
   }
-
-  const record = upsertWorkingMemory(db, {
+  const record = await upsertWorkingMemory(db, {
     content,
     resourceId: options.resource_id,
     threadId: options.thread_id,
   });
   console.log(`Working memory ${record.id} updated.`);
 }
-
-function handleWorkingInit(db: LassoDb, options: MemoryWorkingOptions) {
-  const existing = getWorkingMemory(db, {
+async function handleWorkingInit(db: LassoDb, options: MemoryWorkingOptions) {
+  const existing = await getWorkingMemory(db, {
     resourceId: options.resource_id,
     threadId: options.thread_id,
   });
@@ -258,81 +238,70 @@ function handleWorkingInit(db: LassoDb, options: MemoryWorkingOptions) {
     console.log(`Working memory already exists (${existing.id}). Use --edit to update.`);
     return;
   }
-
-  const record = upsertWorkingMemory(db, {
+  const record = await upsertWorkingMemory(db, {
     content: getDefaultTemplate(),
     resourceId: options.resource_id,
     threadId: options.thread_id,
   });
   console.log(`Working memory ${record.id} initialized with default template.`);
 }
-
-function handleWorkingReset(db: LassoDb, options: MemoryWorkingOptions) {
-  const record = upsertWorkingMemory(db, {
+async function handleWorkingReset(db: LassoDb, options: MemoryWorkingOptions) {
+  const record = await upsertWorkingMemory(db, {
     content: getDefaultTemplate(),
     resourceId: options.resource_id,
     threadId: options.thread_id,
   });
   console.log(`Working memory ${record.id} reset to default template.`);
 }
-
-function handleWorkingShow(db: LassoDb, options: MemoryWorkingOptions) {
-  const record = getWorkingMemory(db, {
+async function handleWorkingShow(db: LassoDb, options: MemoryWorkingOptions) {
+  const record = await getWorkingMemory(db, {
     resourceId: options.resource_id,
     threadId: options.thread_id,
   });
   if (!record) {
-    const all = listAllWorkingMemory(db);
+    const all = await listAllWorkingMemory(db);
     if (all.length === 0) {
       console.log('No working memory found. Use --init to create one.');
       return;
     }
-    for (const entry of all) {
-      printWorkingMemoryEntry(entry);
-    }
+    for (const entry of all) printWorkingMemoryEntry(entry);
     return;
   }
   printWorkingMemoryEntry(record);
 }
-
 function printWorkingMemoryEntry(entry: { content: string; id: string; updated_at: string }) {
   console.log(`# Working Memory (${entry.id})`);
   console.log(`Updated: ${entry.updated_at}\n`);
   console.log(entry.content);
 }
-
 async function readMemoryContent(options: MemoryObserveOptions | MemoryReflectOptions) {
   if (options.content) return options.content;
   if (options.input) return Bun.file(options.input).text();
   return Bun.stdin.text();
 }
-
-function renderEntries(entries: ReturnType<typeof listEntries>) {
+function renderEntries(entries: ObservationEntry[]) {
   console.log('## Observation Entries\n');
   if (entries.length === 0) {
     console.log('No observation entries found.\n');
     return;
   }
-
-  const grouped = groupByCategory(entries);
-  for (const [category, categoryEntries] of grouped) {
+  for (const [category, categoryEntries] of groupByCategory(entries)) {
     if (category) console.log(`### ${category}\n`);
     for (const entry of categoryEntries) {
       const emoji = priorityEmoji(entry.priority as ObservationPriority);
-      const temporal = formatTemporalAnchor(entry);
-      console.log(`- ${emoji} ${entry.observed_at}: ${temporal}${entry.content}`);
+      console.log(
+        `- ${emoji} ${entry.observed_at}: ${formatTemporalAnchor(entry)}${entry.content}`,
+      );
     }
     console.log();
   }
 }
-
-function renderReflections(reflections: ReturnType<typeof listReflections>) {
+function renderReflections(reflections: MemoryReflection[]) {
   console.log('## Reflections\n');
   if (reflections.length === 0) {
     console.log('No reflections found.\n');
     return;
   }
-
   for (const reflection of reflections) {
     console.log(`### ${reflection.id}`);
     console.log(`**Created:** ${reflection.created_at}`);

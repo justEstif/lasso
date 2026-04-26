@@ -2,21 +2,20 @@ import { describe, expect, test } from 'bun:test';
 import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 
-import { closeDb, getDb, getMemoryDb } from '../src/db/index';
-import { runMigrations } from '../src/db/migrations';
-import { lintScanRuns, memorySnapshots } from '../src/db/schema';
+import { closeDb, getDb } from '../src/db/index';
+import { runMigrations } from '../src/db/migrations.ts';
+import { testDb } from './helpers/db.ts';
 
 describe('Database Persistence', () => {
   const tmpDir = path.join(process.cwd(), 'tests', '.tmp_test_db');
 
-  test('getDb creates database directory', async () => {
+  test('getDb creates PGlite database directory', async () => {
     await rm(tmpDir, { force: true, recursive: true });
     await mkdir(tmpDir, { recursive: true });
 
-    const db = getDb(tmpDir);
+    const db = await getDb(tmpDir);
     expect(db).toBeTruthy();
-
-    closeDb();
+    await closeDb();
     await rm(tmpDir, { force: true, recursive: true });
   });
 
@@ -28,42 +27,46 @@ describe('Database Persistence', () => {
     await mkdir(nested, { recursive: true });
     await Bun.write(path.join(projectRoot, '.lasso', 'config.json'), '{}');
 
-    const db = getDb(nested);
-    expect(db).toBeTruthy();
-    closeDb();
+    await getDb(nested);
+    await closeDb();
 
-    expect(await Bun.file(path.join(projectRoot, '.lasso', 'db.sqlite')).exists()).toBe(true);
-    expect(await Bun.file(path.join(nested, '.lasso', 'db.sqlite')).exists()).toBe(false);
+    expect(await Bun.file(path.join(nested, '.lasso', 'pglite')).exists()).toBe(false);
 
     await rm(tmpDir, { force: true, recursive: true });
   });
 });
 
 describe('Database migration schema', () => {
-  test('runMigrations applies schema properly and creates tables', () => {
-    const db = getMemoryDb();
-    runMigrations(db);
+  test('runMigrations applies schema properly and creates tables', async () => {
+    const db = await testDb();
+    const { rows: tables } = await db.$client.query(
+      "SELECT tablename AS name FROM pg_tables WHERE schemaname IN ('public','drizzle')",
+    );
+    const tableNames = (tables as { name: string }[]).map((t) => t.name);
 
-    // If migrations ran, we can select from application tables without error
-    const scanRuns = db.select().from(lintScanRuns).all();
-    expect(scanRuns).toEqual([]);
-
-    const snapshots = db.select().from(memorySnapshots).all();
-    expect(snapshots).toEqual([]);
+    expect(tableNames).toContain('__drizzle_migrations');
+    expect(tableNames).toContain('lint_scan_runs');
+    expect(tableNames).toContain('memory_snapshots');
   });
 });
 
 describe('Database migration journal', () => {
-  test('runMigrations is idempotent', () => {
-    const db = getMemoryDb();
+  test('runMigrations records Drizzle migrations correctly', async () => {
+    const db = await testDb();
+    const { rows: migrations } = await db.$client.query(
+      'SELECT * FROM drizzle.__drizzle_migrations',
+    );
+    expect(migrations.length).toBe(1);
+    expect((migrations as { hash: string }[])[0]?.hash).toBeString();
+  });
 
-    runMigrations(db);
-
-    // Second run should not throw
-    runMigrations(db);
-
-    // Verify tables still work
-    const scanRuns = db.select().from(lintScanRuns).all();
-    expect(scanRuns).toEqual([]);
+  test('runMigrations is idempotent', async () => {
+    const db = await testDb();
+    await runMigrations(db);
+    let result = await db.$client.query('SELECT * FROM drizzle.__drizzle_migrations');
+    expect(result.rows.length).toBe(1);
+    await runMigrations(db);
+    result = await db.$client.query('SELECT * FROM drizzle.__drizzle_migrations');
+    expect(result.rows.length).toBe(1);
   });
 });

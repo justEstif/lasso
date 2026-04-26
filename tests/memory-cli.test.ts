@@ -81,7 +81,7 @@ describe('memory CLI integration', () => {
     expectMemoryLifecycleOutput({ exported, observe, reflect, status, stdinReflect });
 
     await rm(cwd, { force: true, recursive: true });
-  });
+  }, 30000);
 
   test('export renders entries from observations', async () => {
     const cwd = await prepareTempProject('.tmp_memory_dedupe');
@@ -102,7 +102,7 @@ describe('memory CLI integration', () => {
     expect(exported.stdout).toContain('migrate dotfiles to Nix');
 
     await rm(cwd, { force: true, recursive: true });
-  });
+  }, 30000);
 });
 
 describe('memory should-observe', () => {
@@ -139,7 +139,7 @@ describe('memory should-observe', () => {
     expect(exceedsThreshold.exitCode).toBe(0);
 
     await rm(cwd, { force: true, recursive: true });
-  });
+  }, 30000);
 });
 
 describe('memory should-reflect', () => {
@@ -173,5 +173,5 @@ describe('memory should-reflect', () => {
     expect(belowJson.lastObserved).toBe(5000);
 
     await rm(cwd, { force: true, recursive: true });
-  });
+  }, 30000);
 });

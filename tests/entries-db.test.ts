@@ -2,8 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { ParsedEntry } from '../src/observers/memory/parser.ts';
 
-import { getMemoryDb } from '../src/db/index';
-import { runMigrations } from '../src/db/migrations';
+import { testDb } from './helpers/db.ts';
 import {
   countEntries,
   createEntries,
@@ -13,10 +12,8 @@ import {
   searchEntries,
 } from '../src/observers/memory/db.ts';
 
-function entryDb() {
-  const db = getMemoryDb();
-  runMigrations(db);
-  return db;
+async function entryDb() {
+  return testDb();
 }
 
 function sampleEntries(): ParsedEntry[] {
@@ -48,71 +45,71 @@ function sampleEntries(): ParsedEntry[] {
   ];
 }
 
-function seedEntries(db: ReturnType<typeof entryDb>) {
-  const snapshot = createSnapshot(db, { content: 'test', scope: 'thread' });
-  createEntries(db, { entries: sampleEntries(), snapshotId: snapshot.id });
+async function seedEntries(db: Awaited<ReturnType<typeof testDb>>) {
+  const snapshot = await createSnapshot(db, { content: 'test', scope: 'thread' });
+  await createEntries(db, { entries: sampleEntries(), snapshotId: snapshot.id });
   return snapshot;
 }
 
 describe('entry creation and listing', () => {
-  test('creates and lists entries for a snapshot', () => {
-    const db = entryDb();
-    const snapshot = seedEntries(db);
+  test('creates and lists entries for a snapshot', async () => {
+    const db = await entryDb();
+    const snapshot = await seedEntries(db);
 
-    expect(countEntries(db)).toBe(3);
+    expect(await countEntries(db)).toBe(3);
 
-    const listed = listEntries(db);
+    const listed = await listEntries(db);
     expect(listed).toHaveLength(3);
     expect(listed[0]?.observed_at).toBe('2025-04-25');
     expect(listed[2]?.observed_at).toBe('2025-04-23');
 
-    const bySnapshot = listEntriesBySnapshot(db, snapshot.id);
+    const bySnapshot = await listEntriesBySnapshot(db, snapshot.id);
     expect(bySnapshot).toHaveLength(3);
   });
 });
 
 describe('entry priority filtering', () => {
-  test('filters entries by priority', () => {
-    const db = entryDb();
-    seedEntries(db);
+  test('filters entries by priority', async () => {
+    const db = await entryDb();
+    await seedEntries(db);
 
-    const high = listEntries(db, { priority: 'high' });
+    const high = await listEntries(db, { priority: 'high' });
     expect(high).toHaveLength(1);
     expect(high[0]?.priority).toBe('high');
 
-    const medium = listEntries(db, { priority: 'medium' });
+    const medium = await listEntries(db, { priority: 'medium' });
     expect(medium).toHaveLength(1);
 
-    const low = listEntries(db, { priority: 'low' });
+    const low = await listEntries(db, { priority: 'low' });
     expect(low).toHaveLength(1);
   });
 });
 
 describe('entry date filtering', () => {
-  test('filters entries by date range', () => {
-    const db = entryDb();
-    seedEntries(db);
+  test('filters entries by date range', async () => {
+    const db = await entryDb();
+    await seedEntries(db);
 
-    const after = listEntries(db, { after: '2025-04-24' });
+    const after = await listEntries(db, { after: '2025-04-24' });
     expect(after).toHaveLength(2);
 
-    const before = listEntries(db, { before: '2025-04-24' });
+    const before = await listEntries(db, { before: '2025-04-24' });
     expect(before).toHaveLength(2);
 
-    const range = listEntries(db, { after: '2025-04-24', before: '2025-04-24' });
+    const range = await listEntries(db, { after: '2025-04-24', before: '2025-04-24' });
     expect(range).toHaveLength(1);
     expect(range[0]?.observed_at).toBe('2025-04-24');
   });
 });
 
 describe('entry snapshot scoping', () => {
-  test('lists entries by snapshot and counts correctly', () => {
-    const db = entryDb();
-    const first = createSnapshot(db, { content: 'first', scope: 'thread' });
-    const second = createSnapshot(db, { content: 'second', scope: 'thread' });
+  test('lists entries by snapshot and counts correctly', async () => {
+    const db = await entryDb();
+    const first = await createSnapshot(db, { content: 'first', scope: 'thread' });
+    const second = await createSnapshot(db, { content: 'second', scope: 'thread' });
 
-    createEntries(db, { entries: sampleEntries(), snapshotId: first.id });
-    createEntries(db, {
+    await createEntries(db, { entries: sampleEntries(), snapshotId: first.id });
+    await createEntries(db, {
       entries: [
         {
           category: 'Test',
@@ -126,29 +123,29 @@ describe('entry snapshot scoping', () => {
       snapshotId: second.id,
     });
 
-    expect(listEntriesBySnapshot(db, first.id)).toHaveLength(3);
-    expect(listEntriesBySnapshot(db, second.id)).toHaveLength(1);
-    expect(countEntries(db)).toBe(4);
+    expect(await listEntriesBySnapshot(db, first.id)).toHaveLength(3);
+    expect(await listEntriesBySnapshot(db, second.id)).toHaveLength(1);
+    expect(await countEntries(db)).toBe(4);
   });
 });
 
 describe('entry search', () => {
-  test('searches entries by content tokens', () => {
-    const db = entryDb();
-    seedEntries(db);
+  test('searches entries by content tokens', async () => {
+    const db = await entryDb();
+    await seedEntries(db);
 
-    const results = searchEntries(db, 'Bun APIs');
+    const results = await searchEntries(db, 'Bun APIs');
     expect(results).toHaveLength(1);
     expect(results[0]?.content).toContain('Bun APIs');
   });
 });
 
 describe('temporal anchoring', () => {
-  test('stores referenced_date and relative_offset in entries', () => {
-    const db = entryDb();
-    const snapshot = createSnapshot(db, { content: 'temporal test', scope: 'thread' });
+  test('stores referenced_date and relative_offset in entries', async () => {
+    const db = await entryDb();
+    const snapshot = await createSnapshot(db, { content: 'temporal test', scope: 'thread' });
 
-    createEntries(db, {
+    await createEntries(db, {
       entries: [
         {
           category: 'Schedule',
@@ -170,7 +167,7 @@ describe('temporal anchoring', () => {
       snapshotId: snapshot.id,
     });
 
-    const entries = listEntries(db);
+    const entries = await listEntries(db);
     expect(entries).toHaveLength(2);
 
     const flight = entries.find((e) => e.content === 'Flight to conference');
@@ -184,11 +181,11 @@ describe('temporal anchoring', () => {
 });
 
 describe('temporal sorting by referenced_date', () => {
-  test('sorts by referenced_date ascending', () => {
-    const db = entryDb();
-    const snapshot = createSnapshot(db, { content: 'sort test', scope: 'thread' });
+  test('sorts by referenced_date ascending', async () => {
+    const db = await entryDb();
+    const snapshot = await createSnapshot(db, { content: 'sort test', scope: 'thread' });
 
-    createEntries(db, {
+    await createEntries(db, {
       entries: [
         {
           category: 'Dates',
@@ -210,18 +207,18 @@ describe('temporal sorting by referenced_date', () => {
       snapshotId: snapshot.id,
     });
 
-    const sorted = listEntries(db, { sortField: 'referenced_date', sortOrder: 'asc' });
+    const sorted = await listEntries(db, { sortField: 'referenced_date', sortOrder: 'asc' });
     expect(sorted[0]?.content).toBe('Earlier event');
     expect(sorted[1]?.content).toBe('Later event');
   });
 });
 
 describe('temporal sorting by created_at', () => {
-  test('sorts by created_at ascending', () => {
-    const db = entryDb();
-    seedEntries(db);
+  test('sorts by created_at ascending', async () => {
+    const db = await entryDb();
+    await seedEntries(db);
 
-    const sorted = listEntries(db, { sortField: 'created_at', sortOrder: 'asc' });
+    const sorted = await listEntries(db, { sortField: 'created_at', sortOrder: 'asc' });
     expect(sorted.length).toBeGreaterThan(0);
     for (let i = 1; i < sorted.length; i++) {
       expect(sorted[i]!.created_at >= sorted[i - 1]!.created_at).toBe(true);

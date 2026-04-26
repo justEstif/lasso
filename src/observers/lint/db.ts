@@ -27,165 +27,166 @@ export type LintEntry = typeof lintEntries.$inferSelect & { status: LintStatus }
 export type LintRecurrence = typeof lintRecurrences.$inferSelect;
 export type LintScanRun = typeof lintScanRuns.$inferSelect;
 
-export function addRecurrence(db: LassoDb, entryId: string, input: AddRecurrenceInput): void {
+export async function addRecurrence(
+  db: LassoDb,
+  entryId: string,
+  input: AddRecurrenceInput,
+): Promise<void> {
   const now = new Date().toISOString();
 
-  db.insert(lintRecurrences)
-    .values({
-      entry_id: entryId,
-      note: input.note,
-      observed_at: now,
-      referenced_date: input.referencedDate ?? null,
-      relative_offset: input.relativeOffset ?? null,
-    })
-    .run();
-  db.update(lintEntries).set({ updated_at: now }).where(eq(lintEntries.id, entryId)).run();
+  await db.insert(lintRecurrences).values({
+    entry_id: entryId,
+    note: input.note,
+    observed_at: now,
+    referenced_date: input.referencedDate ?? null,
+    relative_offset: input.relativeOffset ?? null,
+  });
+  await db.update(lintEntries).set({ updated_at: now }).where(eq(lintEntries.id, entryId));
 }
 
-export function createEntry(
+export async function createEntry(
   db: LassoDb,
   data: Omit<LintEntry, 'created_at' | 'id' | 'updated_at'>,
-): LintEntry {
+): Promise<LintEntry> {
   const id = randomUUID();
   const now = new Date().toISOString();
   const entry = { ...data, created_at: now, id, updated_at: now };
 
-  db.insert(lintEntries).values(entry).run();
-  return getEntry(db, id)!;
+  await db.insert(lintEntries).values(entry);
+  return (await getEntry(db, id))!;
 }
 
-export function getEntry(db: LassoDb, id: string): LintEntry | null {
-  const prepared = db
-    .select()
-    .from(lintEntries)
-    .where(eq(lintEntries.id, sql.placeholder('id')))
-    .prepare();
-
-  return (prepared.get({ id }) as LintEntry | undefined) ?? null;
+export async function getEntry(db: LassoDb, id: string): Promise<LintEntry | null> {
+  const rows = await db.select().from(lintEntries).where(eq(lintEntries.id, id)).limit(1);
+  const entry = rows[0] as LintEntry | undefined;
+  return entry ? normalizeLintEntry(entry) : null;
 }
 
-export function resolveEntryId(db: LassoDb, idOrPrefix: string): string {
-  const exact = getEntry(db, idOrPrefix);
+export async function resolveEntryId(db: LassoDb, idOrPrefix: string): Promise<string> {
+  const exact = await getEntry(db, idOrPrefix);
   if (exact) return exact.id;
 
-  const matches = db
+  const matches = await db
     .select({ id: lintEntries.id })
     .from(lintEntries)
     .where(sql`${lintEntries.id} LIKE ${`${idOrPrefix}%`}`)
-    .limit(2)
-    .all();
+    .limit(2);
 
   if (matches.length === 1 && matches[0]?.id) return matches[0].id;
   if (matches.length > 1) throw new Error(`Lint entry id prefix ${idOrPrefix} is ambiguous.`);
   throw new Error(`Lint entry ${idOrPrefix} not found.`);
 }
 
-export function getLastScanRun(db: LassoDb): LintScanRun | null {
-  const prepared = db
-    .select()
-    .from(lintScanRuns)
-    .orderBy(desc(lintScanRuns.scanned_at))
-    .limit(1)
-    .prepare();
-
-  return (prepared.get() as LintScanRun | undefined) ?? null;
+export async function getLastScanRun(db: LassoDb): Promise<LintScanRun | null> {
+  const rows = await db.select().from(lintScanRuns).orderBy(desc(lintScanRuns.scanned_at)).limit(1);
+  return (rows[0] as LintScanRun | undefined) ?? null;
 }
 
-export function getLintObservationState(db: LassoDb): LintObservationState {
-  const row = db.select().from(lintObservationState).limit(1).get();
+export async function getLintObservationState(db: LassoDb): Promise<LintObservationState> {
+  const rows = await db.select().from(lintObservationState).limit(1);
+  const row = rows[0];
   return {
     lastObservedTokens: row?.last_observed_tokens ?? 0,
     lastObservedTurns: row?.last_observed_turns ?? 0,
   };
 }
 
-export function getRecurrences(db: LassoDb, entryId: string): LintRecurrence[] {
-  const prepared = db
-    .select()
-    .from(lintRecurrences)
-    .where(eq(lintRecurrences.entry_id, sql.placeholder('entryId')))
-    .orderBy(desc(lintRecurrences.observed_at))
-    .prepare();
-
-  return prepared.all({ entryId }) as LintRecurrence[];
+export async function getRecurrences(db: LassoDb, entryId: string): Promise<LintRecurrence[]> {
+  return (
+    (await db
+      .select()
+      .from(lintRecurrences)
+      .where(eq(lintRecurrences.entry_id, entryId))
+      .orderBy(desc(lintRecurrences.observed_at))) as LintRecurrence[]
+  ).map(normalizeLintRecurrence);
 }
 
-export function listActiveEntries(db: LassoDb, limit: number): LintEntry[] {
-  const prepared = db
-    .select()
-    .from(lintEntries)
-    .where(inArray(lintEntries.status, ['proposed', 'accepted', 'deferred']))
-    .orderBy(desc(lintEntries.updated_at))
-    .limit(sql.placeholder('limit'))
-    .prepare();
-
-  return prepared.all({ limit }) as LintEntry[];
+export async function listActiveEntries(db: LassoDb, limit: number): Promise<LintEntry[]> {
+  return (
+    (await db
+      .select()
+      .from(lintEntries)
+      .where(inArray(lintEntries.status, ['proposed', 'accepted', 'deferred']))
+      .orderBy(desc(lintEntries.updated_at))
+      .limit(limit)) as LintEntry[]
+  ).map(normalizeLintEntry);
 }
 
-export function listEntries(db: LassoDb, status?: LintStatus): LintEntry[] {
+export async function listEntries(db: LassoDb, status?: LintStatus): Promise<LintEntry[]> {
   if (status) return listEntriesByStatus(db, status);
 
-  const prepared = db.select().from(lintEntries).orderBy(desc(lintEntries.created_at)).prepare();
-
-  return prepared.all() as LintEntry[];
+  return (
+    (await db.select().from(lintEntries).orderBy(desc(lintEntries.created_at))) as LintEntry[]
+  ).map(normalizeLintEntry);
 }
 
-export function recordLintObservationProgress(
+export async function recordLintObservationProgress(
   db: LassoDb,
   progress: { observedTokens: number; observedTurns: number },
-): void {
+): Promise<void> {
   const now = new Date().toISOString();
-  const existing = db.select().from(lintObservationState).limit(1).get();
+  const existing = (await db.select().from(lintObservationState).limit(1))[0];
 
   if (existing) {
-    db.update(lintObservationState)
+    await db
+      .update(lintObservationState)
       .set({
         last_observed_tokens: progress.observedTokens,
         last_observed_turns: progress.observedTurns,
         updated_at: now,
       })
-      .where(eq(lintObservationState.id, existing.id))
-      .run();
+      .where(eq(lintObservationState.id, existing.id));
     return;
   }
 
-  db.insert(lintObservationState)
-    .values({
-      last_observed_tokens: progress.observedTokens,
-      last_observed_turns: progress.observedTurns,
-      updated_at: now,
-    })
-    .run();
+  await db.insert(lintObservationState).values({
+    last_observed_tokens: progress.observedTokens,
+    last_observed_turns: progress.observedTurns,
+    updated_at: now,
+  });
 }
 
-export function recordScanRun(
+export async function recordScanRun(
   db: LassoDb,
   summary: { created: number; recurrences: number; skipped: number },
-): void {
-  db.insert(lintScanRuns)
-    .values({
-      created_count: summary.created,
-      recurrence_count: summary.recurrences,
-      scanned_at: new Date().toISOString(),
-      skipped_count: summary.skipped,
-    })
-    .run();
+): Promise<void> {
+  await db.insert(lintScanRuns).values({
+    created_count: summary.created,
+    recurrence_count: summary.recurrences,
+    scanned_at: new Date().toISOString(),
+    skipped_count: summary.skipped,
+  });
 }
 
-export function updateEntryStatus(db: LassoDb, id: string, status: LintStatus): void {
-  db.update(lintEntries)
+export async function updateEntryStatus(
+  db: LassoDb,
+  id: string,
+  status: LintStatus,
+): Promise<void> {
+  await db
+    .update(lintEntries)
     .set({ status, updated_at: new Date().toISOString() })
-    .where(eq(lintEntries.id, id))
-    .run();
+    .where(eq(lintEntries.id, id));
 }
 
-function listEntriesByStatus(db: LassoDb, status: LintStatus): LintEntry[] {
-  const prepared = db
-    .select()
-    .from(lintEntries)
-    .where(eq(lintEntries.status, sql.placeholder('status')))
-    .orderBy(desc(lintEntries.created_at))
-    .prepare();
+function normalizeDateOnly(value: null | string): null | string {
+  return value?.endsWith(' 00:00:00+00') ? value.slice(0, 10) : value;
+}
 
-  return prepared.all({ status }) as LintEntry[];
+function normalizeLintEntry(entry: LintEntry): LintEntry {
+  return { ...entry, referenced_date: normalizeDateOnly(entry.referenced_date) };
+}
+
+function normalizeLintRecurrence(recurrence: LintRecurrence): LintRecurrence {
+  return { ...recurrence, referenced_date: normalizeDateOnly(recurrence.referenced_date) };
+}
+
+async function listEntriesByStatus(db: LassoDb, status: LintStatus): Promise<LintEntry[]> {
+  return (
+    (await db
+      .select()
+      .from(lintEntries)
+      .where(eq(lintEntries.status, status))
+      .orderBy(desc(lintEntries.created_at))) as LintEntry[]
+  ).map(normalizeLintEntry);
 }

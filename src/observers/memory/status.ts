@@ -26,17 +26,17 @@ export interface MemoryStatusModel {
  * The model hides which repository calls are needed for counts vs. recency so
  * display surfaces can stay focused on presentation.
  */
-export function buildMemoryStatusModel(db: LassoDb): MemoryStatusModel {
-  const recentSnapshots = listSnapshots(db, 5);
-  const recentReflections = listReflections(db, 3);
+export async function buildMemoryStatusModel(db: LassoDb): Promise<MemoryStatusModel> {
+  const recentSnapshots = await listSnapshots(db, 5);
+  const recentReflections = await listReflections(db, 3);
 
   return {
-    entries: countEntries(db),
+    entries: await countEntries(db),
     lastReflection: recentReflections[0]?.created_at ?? 'never',
     lastSnapshot: recentSnapshots[0]?.created_at ?? 'never',
     recentReflections,
     recentSnapshots,
-    reflections: countReflections(db),
-    snapshots: countSnapshots(db),
+    reflections: await countReflections(db),
+    snapshots: await countSnapshots(db),
   };
 }

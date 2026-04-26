@@ -1,7 +1,7 @@
-import { Box, render, renderToString, Text, useApp, useInput } from 'ink';
-import React, { useMemo, useState } from 'react';
-
 import type { LassoDb } from '../db/index.ts';
+import { Box, render, renderToString, Text, useApp, useInput } from 'ink';
+import React, { useEffect, useState } from 'react';
+
 import type { LassoConfig } from '../config/load.ts';
 
 import { buildLintStatusModel } from '../observers/lint/status.ts';
@@ -36,21 +36,22 @@ interface DashboardModel {
 
 export async function handleTui(db: LassoDb, config: LassoConfig, options: TuiOptions) {
   if (options.once || !process.stdout.isTTY) {
-    console.log(renderDashboard(db, config));
+    console.log(await renderDashboard(db, config));
     return;
   }
 
-  const instance = render(<DashboardApp config={config} db={db} />);
+  const initialModel = await buildDashboardModel(db, config);
+  const instance = render(<DashboardApp config={config} db={db} initialModel={initialModel} />);
   await instance.waitUntilExit();
 }
 
-export function renderDashboard(db: LassoDb, config: LassoConfig) {
-  return renderToString(<Dashboard model={buildDashboardModel(db, config)} />);
+export async function renderDashboard(db: LassoDb, config: LassoConfig) {
+  return renderToString(<Dashboard model={await buildDashboardModel(db, config)} />);
 }
 
-function buildDashboardModel(db: LassoDb, config: LassoConfig): DashboardModel {
-  const lint = buildLintStatusModel(db, config);
-  const memory = buildMemoryStatusModel(db);
+async function buildDashboardModel(db: LassoDb, config: LassoConfig): Promise<DashboardModel> {
+  const lint = await buildLintStatusModel(db, config);
+  const memory = await buildMemoryStatusModel(db);
 
   return {
     lint: {
@@ -106,10 +107,23 @@ function Dashboard({ model }: { model: DashboardModel }) {
   );
 }
 
-function DashboardApp({ config, db }: { config: LassoConfig; db: LassoDb }) {
+function DashboardApp({
+  config,
+  db,
+  initialModel,
+}: {
+  config: LassoConfig;
+  db: LassoDb;
+  initialModel: DashboardModel;
+}) {
   const { exit } = useApp();
+  const [model, setModel] = useState(initialModel);
   const [refreshToken, setRefreshToken] = useState(0);
-  const model = useMemo(() => buildDashboardModel(db, config), [config, db, refreshToken]);
+
+  useEffect(() => {
+    if (refreshToken === 0) return;
+    void buildDashboardModel(db, config).then(setModel);
+  }, [config, db, refreshToken]);
 
   useInput((input, key) => {
     if (input === 'q' || key.escape || (key.ctrl && input === 'c')) exit();

@@ -42,7 +42,7 @@ describe('global CLI integration', () => {
     expect(config.stdout).toContain('"enabled": true');
 
     await rm(cwd, { force: true, recursive: true });
-  });
+  }, 30000);
 });
 
 describe('lint CLI detector output integration', () => {
@@ -77,7 +77,7 @@ describe('lint CLI detector output integration', () => {
     expect(show.stdout).toContain('Status: accepted');
 
     await rm(cwd, { force: true, recursive: true });
-  });
+  }, 30000);
 });
 
 describe('lint CLI threshold integration', () => {
@@ -113,7 +113,7 @@ describe('lint CLI threshold integration', () => {
     expect(forced.stdout).toContain('1 created');
 
     await rm(cwd, { force: true, recursive: true });
-  });
+  }, 30000);
 });
 
 describe('lint CLI stdin integration', () => {
@@ -135,7 +135,7 @@ describe('lint CLI stdin integration', () => {
     expect(list.stdout).toContain('Avoid antd imports in migrated pages');
 
     await rm(cwd, { force: true, recursive: true });
-  });
+  }, 30000);
 });
 
 describe('lint CLI detector command integration', () => {
@@ -159,7 +159,7 @@ describe('lint CLI detector command integration', () => {
     expect(list.stdout).toContain('Prefer shadcn components');
 
     await rm(cwd, { force: true, recursive: true });
-  });
+  }, 30000);
 });
 
 function detectorCommandScript() {

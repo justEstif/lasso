@@ -31,8 +31,8 @@ import { handleTui } from '../tui/dashboard.tsx';
 export async function bootstrap() {
   const program = new Command();
 
-  const db = getDb();
-  runMigrations(db);
+  const db = await getDb();
+  await runMigrations(db);
 
   program
     .name('lasso')
@@ -45,7 +45,7 @@ export async function bootstrap() {
   registerLintCommands(program, db, config);
   registerMemoryCommands(program, db, config);
 
-  program.parse();
+  await program.parseAsync();
 }
 
 function describeConfiguredObservers(value = 'lint,memory') {
@@ -67,10 +67,10 @@ function handleDoctor(db: LassoDb, config: Awaited<ReturnType<typeof loadConfig>
   console.log('- Pi extension: run setup if .pi/extensions/lasso.ts is missing');
 }
 
-function handleGlobalStatus(db: LassoDb, config: Awaited<ReturnType<typeof loadConfig>>) {
-  handleLintStatus(db, config);
+async function handleGlobalStatus(db: LassoDb, config: Awaited<ReturnType<typeof loadConfig>>) {
+  await handleLintStatus(db, config);
   console.log('');
-  handleMemoryStatus(db);
+  await handleMemoryStatus(db);
 }
 
 async function handleSetup(opts: {
@@ -306,7 +306,7 @@ function registerMemoryWorkingCommand(memoryCmd: Command, db: LassoDb) {
     .option('--thread-id <id>', 'Scope working memory to a specific thread')
     .action(async (opts) => {
       const stdin = opts.edit ? await readStdinContent() : undefined;
-      handleMemoryWorking(db, { ...opts, stdin });
+      await handleMemoryWorking(db, { ...opts, stdin });
     });
 }
 

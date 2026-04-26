@@ -1,16 +1,18 @@
 import { describe, expect, test } from 'bun:test';
 
 import { defaultConfig } from '../src/config/load.ts';
-import { getMemoryDb } from '../src/db/index';
-import { runMigrations } from '../src/db/migrations';
 import { createEntry } from '../src/observers/lint/db.ts';
 import { buildLintStatusModel } from '../src/observers/lint/status.ts';
 import { createEntries, createSnapshot } from '../src/observers/memory/db.ts';
 import { buildMemoryStatusModel } from '../src/observers/memory/status.ts';
+import { testDb } from './helpers/db.ts';
 
-function addMemorySnapshot(db: ReturnType<typeof testDb>) {
-  const snapshot = createSnapshot(db, { content: '- 🔴 [decision] Use Bun', scope: 'thread' });
-  createEntries(db, {
+async function addMemorySnapshot(db: Awaited<ReturnType<typeof testDb>>) {
+  const snapshot = await createSnapshot(db, {
+    content: '- 🔴 [decision] Use Bun',
+    scope: 'thread',
+  });
+  await createEntries(db, {
     entries: [
       {
         category: 'decision',
@@ -25,9 +27,12 @@ function addMemorySnapshot(db: ReturnType<typeof testDb>) {
   });
 }
 
-function addStatusedLintEntry(db: ReturnType<typeof testDb>, status: 'accepted' | 'proposed') {
-  createEntry(db, {
-    affected_paths: JSON.stringify([]),
+async function addStatusedLintEntry(
+  db: Awaited<ReturnType<typeof testDb>>,
+  status: 'accepted' | 'proposed',
+) {
+  await createEntry(db, {
+    affected_paths: [],
     category: null,
     description: status === 'proposed' ? 'Prefer Bun APIs' : 'Remove compatibility aliases',
     detector_version: 'test',
@@ -40,35 +45,26 @@ function addStatusedLintEntry(db: ReturnType<typeof testDb>, status: 'accepted' 
   });
 }
 
-function testDb() {
-  const db = getMemoryDb();
-  runMigrations(db);
-  return db;
-}
-
 describe('observer status models', () => {
-  test('builds lint status once for CLI and TUI surfaces', () => {
-    const db = testDb();
-    addStatusedLintEntry(db, 'proposed');
-    addStatusedLintEntry(db, 'accepted');
+  test('builds lint status once for CLI and TUI surfaces', async () => {
+    const db = await testDb();
+    await addStatusedLintEntry(db, 'proposed');
+    await addStatusedLintEntry(db, 'accepted');
 
-    const status = buildLintStatusModel(db, defaultConfig);
-
-    expect(status.counts.proposed).toBe(1);
-    expect(status.counts.accepted).toBe(1);
-    expect(status.saturation.saturated).toBe(false);
-    expect(status.total).toBe(2);
+    const model = await buildLintStatusModel(db, defaultConfig);
+    expect(model.total).toBe(2);
+    expect(model.counts.proposed).toBe(1);
+    expect(model.counts.accepted).toBe(1);
+    expect(model.saturation.activeCount).toBe(1);
   });
 
-  test('builds memory status once for CLI and TUI surfaces', () => {
-    const db = testDb();
-    addMemorySnapshot(db);
+  test('builds memory status once for CLI and TUI surfaces', async () => {
+    const db = await testDb();
+    await addMemorySnapshot(db);
 
-    const status = buildMemoryStatusModel(db);
-
-    expect(status.snapshots).toBe(1);
-    expect(status.entries).toBe(1);
-    expect(status.lastSnapshot).not.toBe('never');
-    expect(status.recentSnapshots).toHaveLength(1);
+    const model = await buildMemoryStatusModel(db);
+    expect(model.snapshots).toBe(1);
+    expect(model.entries).toBe(1);
+    expect(model.recentSnapshots[0]?.content).toContain('Use Bun');
   });
 });

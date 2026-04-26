@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { getMemoryDb } from '../src/db/index';
-import { runMigrations } from '../src/db/migrations';
+import { testDb } from './helpers/db.ts';
 import {
   getDefaultTemplate,
   getWorkingMemory,
@@ -10,17 +9,15 @@ import {
   upsertWorkingMemory,
 } from '../src/observers/memory/working-db.ts';
 
-function workingDb() {
-  const db = getMemoryDb();
-  runMigrations(db);
-  return db;
+async function workingDb() {
+  return testDb();
 }
 
 describe('working memory upsert create', () => {
-  test('creates a new working memory record', () => {
-    const db = workingDb();
+  test('creates a new working memory record', async () => {
+    const db = await workingDb();
 
-    const record = upsertWorkingMemory(db, {
+    const record = await upsertWorkingMemory(db, {
       content: '# Working Memory\n\n## Project\n- Name: lasso',
     });
 
@@ -29,94 +26,94 @@ describe('working memory upsert create', () => {
     expect(record.updated_at).toBeTruthy();
   });
 
-  test('creates separate records for different scopes', () => {
-    const db = workingDb();
+  test('creates separate records for different scopes', async () => {
+    const db = await workingDb();
 
-    upsertWorkingMemory(db, { content: 'Thread content', threadId: 'thread-1' });
-    upsertWorkingMemory(db, { content: 'Resource content', resourceId: 'resource-1' });
+    await upsertWorkingMemory(db, { content: 'Thread content', threadId: 'thread-1' });
+    await upsertWorkingMemory(db, { content: 'Resource content', resourceId: 'resource-1' });
 
-    expect(listAllWorkingMemory(db)).toHaveLength(2);
+    expect(await listAllWorkingMemory(db)).toHaveLength(2);
   });
 });
 
 describe('working memory upsert update', () => {
-  test('updates existing record when scope matches', () => {
-    const db = workingDb();
+  test('updates existing record when scope matches', async () => {
+    const db = await workingDb();
 
-    const first = upsertWorkingMemory(db, {
+    const first = await upsertWorkingMemory(db, {
       content: 'Initial content',
       threadId: 'thread-1',
     });
-    const second = upsertWorkingMemory(db, {
+    const second = await upsertWorkingMemory(db, {
       content: 'Updated content',
       threadId: 'thread-1',
     });
 
     expect(second.id).toBe(first.id);
     expect(second.content).toBe('Updated content');
-    expect(listAllWorkingMemory(db)).toHaveLength(1);
+    expect(await listAllWorkingMemory(db)).toHaveLength(1);
   });
 
-  test('scopes by both resource and thread', () => {
-    const db = workingDb();
+  test('scopes by both resource and thread', async () => {
+    const db = await workingDb();
 
-    upsertWorkingMemory(db, {
+    await upsertWorkingMemory(db, {
       content: 'Combined scope',
       resourceId: 'res-1',
       threadId: 'thr-1',
     });
 
-    const found = getWorkingMemory(db, { resourceId: 'res-1', threadId: 'thr-1' });
+    const found = await getWorkingMemory(db, { resourceId: 'res-1', threadId: 'thr-1' });
     expect(found?.content).toBe('Combined scope');
 
-    const notFound = getWorkingMemory(db, { resourceId: 'res-1' });
+    const notFound = await getWorkingMemory(db, { resourceId: 'res-1' });
     expect(notFound).toBeNull();
   });
 });
 
 describe('working memory retrieval', () => {
-  test('returns null when no working memory exists', () => {
-    const db = workingDb();
-    expect(getWorkingMemory(db)).toBeNull();
+  test('returns null when no working memory exists', async () => {
+    const db = await workingDb();
+    expect(await getWorkingMemory(db)).toBeNull();
   });
 
-  test('retrieves by scope', () => {
-    const db = workingDb();
+  test('retrieves by scope', async () => {
+    const db = await workingDb();
 
-    upsertWorkingMemory(db, { content: 'Thread A', threadId: 'thread-a' });
-    upsertWorkingMemory(db, { content: 'Thread B', threadId: 'thread-b' });
+    await upsertWorkingMemory(db, { content: 'Thread A', threadId: 'thread-a' });
+    await upsertWorkingMemory(db, { content: 'Thread B', threadId: 'thread-b' });
 
-    const result = getWorkingMemory(db, { threadId: 'thread-a' });
+    const result = await getWorkingMemory(db, { threadId: 'thread-a' });
     expect(result?.content).toBe('Thread A');
   });
 
-  test('lists all working memory records', () => {
-    const db = workingDb();
+  test('lists all working memory records', async () => {
+    const db = await workingDb();
 
-    upsertWorkingMemory(db, { content: 'First' });
-    upsertWorkingMemory(db, { content: 'Second', threadId: 't-1' });
+    await upsertWorkingMemory(db, { content: 'First' });
+    await upsertWorkingMemory(db, { content: 'Second', threadId: 't-1' });
 
-    expect(listAllWorkingMemory(db)).toHaveLength(2);
+    expect(await listAllWorkingMemory(db)).toHaveLength(2);
   });
 });
 
 describe('working memory removal', () => {
-  test('removes an existing record', () => {
-    const db = workingDb();
+  test('removes an existing record', async () => {
+    const db = await workingDb();
 
-    const record = upsertWorkingMemory(db, { content: 'To remove' });
-    expect(removeWorkingMemory(db, record.id)).toBe(true);
-    expect(getWorkingMemory(db)).toBeNull();
+    const record = await upsertWorkingMemory(db, { content: 'To remove' });
+    expect(await removeWorkingMemory(db, record.id)).toBe(true);
+    expect(await getWorkingMemory(db)).toBeNull();
   });
 
-  test('returns false for non-existent record', () => {
-    const db = workingDb();
-    expect(removeWorkingMemory(db, 'non-existent')).toBe(false);
+  test('returns false for non-existent record', async () => {
+    const db = await workingDb();
+    expect(await removeWorkingMemory(db, 'non-existent')).toBe(false);
   });
 });
 
 describe('default template', () => {
-  test('provides a structured markdown template', () => {
+  test('provides a structured markdown template', async () => {
     const template = getDefaultTemplate();
     expect(template).toContain('# Working Memory');
     expect(template).toContain('## Project');

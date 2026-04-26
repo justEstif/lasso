@@ -21,15 +21,18 @@ export interface LintStatusModel {
  * Keeping status semantics here prevents every surface from re-learning which
  * states count as stale, throttled, or active.
  */
-export function buildLintStatusModel(db: LassoDb, config: LassoConfig): LintStatusModel {
-  const entries = listEntries(db);
+export async function buildLintStatusModel(
+  db: LassoDb,
+  config: LassoConfig,
+): Promise<LintStatusModel> {
+  const entries = await listEntries(db);
   const counts = countLintStatuses(entries);
   const lintConfig = config.observers.lint;
 
   return {
     counts,
     entries,
-    lastScan: getLastScanRun(db),
+    lastScan: await getLastScanRun(db),
     saturation: checkSaturation({ activeCount: counts.proposed, limit: lintConfig.throttleLimit }),
     staleProposed: countStaleProposed(entries, lintConfig.staleAfterDays),
     total: entries.length,

@@ -1,46 +1,41 @@
-import { Database } from 'bun:sqlite';
-import { drizzle } from 'drizzle-orm/bun-sqlite';
+import { PGlite } from '@electric-sql/pglite';
+import { drizzle } from 'drizzle-orm/pglite';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 
 import { resolveLassoPaths } from '../project/paths.ts';
 import * as schema from './schema.ts';
 
-/**
- * LassoDb is the database abstraction consumers work with.
- * Hides the concrete driver — swap drivers in this file, nowhere else.
- */
 export type LassoDb = ReturnType<typeof drizzle<typeof schema>>;
 
+let clientInstance: null | PGlite = null;
 let dbInstance: LassoDb | null = null;
-let sqliteInstance: Database | null = null;
+let dbInstancePath: null | string = null;
 
-export function closeDb(): void {
-  if (sqliteInstance) {
-    sqliteInstance.close();
-    sqliteInstance = null;
-  }
+export async function closeDb(): Promise<void> {
+  if (clientInstance) await clientInstance.close();
+  clientInstance = null;
   dbInstance = null;
+  dbInstancePath = null;
 }
 
-export function getDb(cwd: string = process.cwd()): LassoDb {
-  if (dbInstance) return dbInstance;
-
+export async function getDb(cwd: string = process.cwd()): Promise<LassoDb> {
   const { lassoDir } = resolveLassoPaths(cwd);
-  const dbPath = path.join(lassoDir, 'db.sqlite');
-  mkdirSync(lassoDir, { recursive: true });
+  const dbPath = path.join(lassoDir, 'pglite');
+  if (dbInstance && dbInstancePath === dbPath) return dbInstance;
+  if (dbInstance) await closeDb();
+  mkdirSync(dbPath, { recursive: true });
 
-  sqliteInstance = new Database(dbPath);
-  sqliteInstance.run('PRAGMA journal_mode = WAL;');
+  clientInstance = new PGlite(dbPath);
+  await clientInstance.waitReady;
+  dbInstance = drizzle(clientInstance, { schema });
+  dbInstancePath = dbPath;
 
-  dbInstance = drizzle(sqliteInstance, { schema });
   return dbInstance;
 }
 
-/**
- * Creates an in-memory LassoDb for tests.
- * Each call creates a fresh database — use sparingly or share via test helpers.
- */
-export function getMemoryDb(): LassoDb {
-  return drizzle(new Database(':memory:'), { schema });
+export async function getMemoryDb(): Promise<LassoDb> {
+  const client = new PGlite('memory://');
+  await client.waitReady;
+  return drizzle(client, { schema });
 }

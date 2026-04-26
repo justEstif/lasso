@@ -1,7 +1,6 @@
 import { and, asc, desc, eq, gte, isNull, lte, sql } from 'drizzle-orm';
 
 import type { LassoDb } from '../../db/index.ts';
-
 import type { ObservationPriority, ParsedEntry } from './parser.ts';
 
 import {
@@ -40,13 +39,9 @@ export interface EntryFilterOptions {
 }
 
 export type EntrySortField = 'created_at' | 'observed_at' | 'referenced_date';
-
 export type MemoryReflection = typeof memoryReflections.$inferSelect;
-
 export type MemoryScope = 'resource' | 'thread';
-
 export type MemorySnapshot = typeof memorySnapshots.$inferSelect & { scope: MemoryScope };
-
 export type ObservationEntry = typeof observationEntries.$inferSelect;
 
 export interface ShouldReflectResult {
@@ -55,40 +50,34 @@ export interface ShouldReflectResult {
   threshold: number;
 }
 
-export function checkShouldReflect(
+export async function checkShouldReflect(
   db: LassoDb,
   scope: MemoryScope,
   threshold: number,
-): ShouldReflectResult {
-  const lastObserved = getObservationState(db, scope);
+): Promise<ShouldReflectResult> {
+  const lastObserved = await getObservationState(db, scope);
   return { lastObserved, needed: lastObserved >= threshold, threshold };
 }
 
-export function countEntries(db: LassoDb): number {
-  const row = db
-    .select({ count: sql<number>`count(*)` })
-    .from(observationEntries)
-    .get();
+export async function countEntries(db: LassoDb): Promise<number> {
+  const row = (await db.select({ count: sql<number>`count(*)` }).from(observationEntries))[0];
   return Number(row?.count ?? 0);
 }
 
-export function countReflections(db: LassoDb): number {
-  const row = db
-    .select({ count: sql<number>`count(*)` })
-    .from(memoryReflections)
-    .get();
+export async function countReflections(db: LassoDb): Promise<number> {
+  const row = (await db.select({ count: sql<number>`count(*)` }).from(memoryReflections))[0];
   return Number(row?.count ?? 0);
 }
 
-export function countSnapshots(db: LassoDb): number {
-  const row = db
-    .select({ count: sql<number>`count(*)` })
-    .from(memorySnapshots)
-    .get();
+export async function countSnapshots(db: LassoDb): Promise<number> {
+  const row = (await db.select({ count: sql<number>`count(*)` }).from(memorySnapshots))[0];
   return Number(row?.count ?? 0);
 }
 
-export function createEntries(db: LassoDb, input: CreateEntriesInput): ObservationEntry[] {
+export async function createEntries(
+  db: LassoDb,
+  input: CreateEntriesInput,
+): Promise<ObservationEntry[]> {
   const now = new Date().toISOString();
   const rows = input.entries.map((entry) => ({
     category: entry.category,
@@ -102,28 +91,30 @@ export function createEntries(db: LassoDb, input: CreateEntriesInput): Observati
     snapshot_id: input.snapshotId,
   }));
 
-  for (const row of rows) {
-    db.insert(observationEntries).values(row).run();
-  }
-
+  if (rows.length > 0) await db.insert(observationEntries).values(rows);
   return rows;
 }
 
-export function createReflection(db: LassoDb, input: CreateReflectionInput): MemoryReflection {
-  const now = new Date().toISOString();
+export async function createReflection(
+  db: LassoDb,
+  input: CreateReflectionInput,
+): Promise<MemoryReflection> {
   const reflection = {
     consolidated_content: input.consolidatedContent,
-    created_at: now,
+    created_at: new Date().toISOString(),
     id: crypto.randomUUID(),
-    source_snapshot_ids: JSON.stringify(input.sourceSnapshotIds),
+    source_snapshot_ids: input.sourceSnapshotIds,
   };
 
-  db.insert(memoryReflections).values(reflection).run();
+  await db.insert(memoryReflections).values(reflection);
   return reflection;
 }
 
-export function createSnapshot(db: LassoDb, input: CreateSnapshotInput): MemorySnapshot {
-  const existing = findDuplicateSnapshot(db, input.content);
+export async function createSnapshot(
+  db: LassoDb,
+  input: CreateSnapshotInput,
+): Promise<MemorySnapshot> {
+  const existing = await findDuplicateSnapshot(db, input.content);
   if (existing) return recordSnapshotSeen(db, existing.id);
 
   const now = new Date().toISOString();
@@ -139,20 +130,25 @@ export function createSnapshot(db: LassoDb, input: CreateSnapshotInput): MemoryS
     superseded_by: null,
   };
 
-  db.insert(memorySnapshots).values(snapshot).run();
+  await db.insert(memorySnapshots).values(snapshot);
   return snapshot as MemorySnapshot;
 }
 
-export function getObservationState(db: LassoDb, scope: MemoryScope): number {
-  const row = db
-    .select()
-    .from(memoryObservationState)
-    .where(eq(memoryObservationState.scope, scope))
-    .get();
+export async function getObservationState(db: LassoDb, scope: MemoryScope): Promise<number> {
+  const row = (
+    await db
+      .select()
+      .from(memoryObservationState)
+      .where(eq(memoryObservationState.scope, scope))
+      .limit(1)
+  )[0];
   return row?.last_observed_tokens ?? 0;
 }
 
-export function listEntries(db: LassoDb, options: EntryFilterOptions = {}): ObservationEntry[] {
+export async function listEntries(
+  db: LassoDb,
+  options: EntryFilterOptions = {},
+): Promise<ObservationEntry[]> {
   const { after, before, limit = 100, priority, sortField, sortOrder } = options;
   const conditions = [];
 
@@ -162,80 +158,84 @@ export function listEntries(db: LassoDb, options: EntryFilterOptions = {}): Obse
 
   const column = observationEntries[sortField ?? 'observed_at'];
   const order = sortOrder === 'asc' ? asc(column) : desc(column);
-
   const query = db
     .select()
     .from(observationEntries)
     .orderBy(order, desc(observationEntries.created_at));
 
-  if (conditions.length > 0) {
-    query.where(and(...conditions));
-  }
-
-  return query.limit(limit).all();
+  if (conditions.length > 0) query.where(and(...conditions));
+  return (await query.limit(limit)).map(normalizeObservationEntry);
 }
 
-export function listEntriesBySnapshot(db: LassoDb, snapshotId: string): ObservationEntry[] {
-  return db
-    .select()
-    .from(observationEntries)
-    .where(eq(observationEntries.snapshot_id, snapshotId))
-    .orderBy(desc(observationEntries.observed_at))
-    .all();
+export async function listEntriesBySnapshot(
+  db: LassoDb,
+  snapshotId: string,
+): Promise<ObservationEntry[]> {
+  return (
+    await db
+      .select()
+      .from(observationEntries)
+      .where(eq(observationEntries.snapshot_id, snapshotId))
+      .orderBy(desc(observationEntries.observed_at))
+  ).map(normalizeObservationEntry);
 }
 
-export function listReflections(db: LassoDb, limit = 20): MemoryReflection[] {
-  return db
+export async function listReflections(db: LassoDb, limit = 20): Promise<MemoryReflection[]> {
+  return await db
     .select()
     .from(memoryReflections)
     .orderBy(desc(memoryReflections.created_at))
-    .limit(limit)
-    .all();
+    .limit(limit);
 }
 
-export function listSnapshots(db: LassoDb, limit = 20): MemorySnapshot[] {
-  return db
+export async function listSnapshots(db: LassoDb, limit = 20): Promise<MemorySnapshot[]> {
+  return (await db
     .select()
     .from(memorySnapshots)
     .where(isNull(memorySnapshots.superseded_by))
     .orderBy(desc(memorySnapshots.last_seen_at), desc(memorySnapshots.created_at))
-    .limit(limit)
-    .all() as MemorySnapshot[];
+    .limit(limit)) as MemorySnapshot[];
 }
 
 export function parseSourceSnapshotIds(reflection: MemoryReflection): string[] {
-  const parsed = JSON.parse(reflection.source_snapshot_ids) as unknown;
-  return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+  return Array.isArray(reflection.source_snapshot_ids)
+    ? reflection.source_snapshot_ids.filter((id): id is string => typeof id === 'string')
+    : [];
 }
 
-export function recordObservationTokenCount(db: LassoDb, scope: MemoryScope, tokens: number): void {
-  const existing = db
-    .select()
-    .from(memoryObservationState)
-    .where(eq(memoryObservationState.scope, scope))
-    .get();
-
+export async function recordObservationTokenCount(
+  db: LassoDb,
+  scope: MemoryScope,
+  tokens: number,
+): Promise<void> {
+  const existing = (
+    await db
+      .select()
+      .from(memoryObservationState)
+      .where(eq(memoryObservationState.scope, scope))
+      .limit(1)
+  )[0];
   const now = new Date().toISOString();
 
   if (existing) {
-    db.update(memoryObservationState)
+    await db
+      .update(memoryObservationState)
       .set({ last_observed_tokens: tokens, updated_at: now })
-      .where(eq(memoryObservationState.scope, scope))
-      .run();
+      .where(eq(memoryObservationState.scope, scope));
   } else {
-    db.insert(memoryObservationState)
-      .values({ last_observed_tokens: tokens, scope, updated_at: now })
-      .run();
+    await db
+      .insert(memoryObservationState)
+      .values({ last_observed_tokens: tokens, scope, updated_at: now });
   }
 }
 
-export function searchEntries(
+export async function searchEntries(
   db: LassoDb,
   query: string,
   options: EntryFilterOptions = {},
-): ObservationEntry[] {
+): Promise<ObservationEntry[]> {
   const queryTokens = new Set(query.toLowerCase().match(/[a-z0-9][a-z0-9_.:/-]{2,}/g));
-  const entries = listEntries(db, { ...options, limit: 200 });
+  const entries = await listEntries(db, { ...options, limit: 200 });
 
   return entries
     .map((entry) => ({ entry, score: scoreContent(entry.content, queryTokens) }))
@@ -245,9 +245,13 @@ export function searchEntries(
     .map((result) => result.entry);
 }
 
-export function searchSnapshots(db: LassoDb, query: string, limit = 5): MemorySnapshot[] {
+export async function searchSnapshots(
+  db: LassoDb,
+  query: string,
+  limit = 5,
+): Promise<MemorySnapshot[]> {
   const queryTokens = new Set(query.toLowerCase().match(/[a-z0-9][a-z0-9_.:/-]{2,}/g));
-  return listSnapshots(db, 100)
+  return (await listSnapshots(db, 100))
     .map((snapshot) => ({ score: scoreSnapshot(snapshot.content, queryTokens), snapshot }))
     .filter((result) => result.score > 0)
     .toSorted((left, right) => right.score - left.score)
@@ -255,18 +259,20 @@ export function searchSnapshots(db: LassoDb, query: string, limit = 5): MemorySn
     .map((result) => result.snapshot);
 }
 
-function findDuplicateSnapshot(db: LassoDb, content: string): MemorySnapshot | null {
+async function findDuplicateSnapshot(db: LassoDb, content: string): Promise<MemorySnapshot | null> {
   const hash = normalizedMemoryHash(content);
-  const exact = db
-    .select()
-    .from(memorySnapshots)
-    .where(eq(memorySnapshots.normalized_hash, hash))
-    .get() as MemorySnapshot | undefined;
+  const exact = (
+    await db
+      .select()
+      .from(memorySnapshots)
+      .where(eq(memorySnapshots.normalized_hash, hash))
+      .limit(1)
+  )[0] as MemorySnapshot | undefined;
   if (exact) return exact;
 
   const fingerprint = memoryFingerprint(content);
   return (
-    listSnapshots(db, 100).find((snapshot) => {
+    (await listSnapshots(db, 100)).find((snapshot) => {
       if (tokenSimilarity(content, snapshot.content) >= 0.6) return true;
       return snapshot.fingerprint
         ? hammingDistance(fingerprint, snapshot.fingerprint) <= 12
@@ -275,24 +281,30 @@ function findDuplicateSnapshot(db: LassoDb, content: string): MemorySnapshot | n
   );
 }
 
-function recordSnapshotSeen(db: LassoDb, id: string): MemorySnapshot {
-  const existing = db
-    .select()
-    .from(memorySnapshots)
-    .where(eq(memorySnapshots.id, id))
-    .get() as MemorySnapshot;
+async function recordSnapshotSeen(db: LassoDb, id: string): Promise<MemorySnapshot> {
+  const existing = (
+    await db.select().from(memorySnapshots).where(eq(memorySnapshots.id, id)).limit(1)
+  )[0] as MemorySnapshot;
   const now = new Date().toISOString();
+  const seenCount = (existing.seen_count ?? 1) + 1;
 
-  db.update(memorySnapshots)
-    .set({ last_seen_at: now, seen_count: (existing.seen_count ?? 1) + 1 })
-    .where(eq(memorySnapshots.id, id))
-    .run();
+  await db
+    .update(memorySnapshots)
+    .set({ last_seen_at: now, seen_count: seenCount })
+    .where(eq(memorySnapshots.id, id));
+  return { ...existing, last_seen_at: now, seen_count: seenCount } as MemorySnapshot;
+}
 
+function normalizeDateOnly(value: null | string): null | string {
+  return value?.endsWith(' 00:00:00+00') ? value.slice(0, 10) : value;
+}
+
+function normalizeObservationEntry(entry: ObservationEntry): ObservationEntry {
   return {
-    ...existing,
-    last_seen_at: now,
-    seen_count: (existing.seen_count ?? 1) + 1,
-  } as MemorySnapshot;
+    ...entry,
+    observed_at: normalizeDateOnly(entry.observed_at) ?? entry.observed_at,
+    referenced_date: normalizeDateOnly(entry.referenced_date),
+  };
 }
 
 function scoreContent(content: string, queryTokens: Set<string>): number {

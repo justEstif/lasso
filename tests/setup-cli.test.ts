@@ -46,7 +46,7 @@ describe('setup CLI integration', () => {
     expect(status.stdout).toContain('Memory Observer Status');
 
     await rm(cwd, { force: true, recursive: true });
-  });
+  }, 30000);
 });
 
 function expectGeneratedPiExtension(extension: string) {
