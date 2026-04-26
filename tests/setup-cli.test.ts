@@ -22,31 +22,9 @@ async function runLasso(cwd: string, args: string[]) {
 }
 
 describe('setup CLI integration', () => {
-  test('setup creates config and optional Pi extension', async () => {
-    const cwd = path.join(projectRoot, 'tests', '.tmp_init_cli');
-    await rm(cwd, { force: true, recursive: true });
-    await mkdir(cwd, { recursive: true });
-
-    const setup = await runLasso(cwd, [
-      'setup',
-      '--harness',
-      'pi',
-      '--detector-command',
-      'lasso-detector',
-    ]);
-    const config = await Bun.file(path.join(cwd, '.lasso', 'config.json')).json();
-    const extension = await Bun.file(path.join(cwd, '.pi', 'extensions', 'lasso.ts')).text();
-    const status = await runLasso(cwd, ['status']);
-
-    expectSetupOutput(setup.stdout);
-    expect(config.harness.type).toBe('pi');
-    expect(config.observers.lint.detectorCommand).toBe('lasso-detector');
-    expectGeneratedPiExtension(extension);
-    expect(status.stdout).toContain('Lint Observer Status');
-    expect(status.stdout).toContain('Memory Observer Status');
-
-    await rm(cwd, { force: true, recursive: true });
-  });
+  test('setup creates config and optional Pi extension', testPiSetupCli);
+  test('setup creates opencode plugin', testOpencodeSetupCli);
+  test('setup creates Claude Code hook settings', testClaudeSetupCli);
 });
 
 function expectGeneratedPiExtension(extension: string) {
@@ -73,10 +51,77 @@ function expectGeneratedPiExtension(extension: string) {
   expect(extension).not.toContain("pi.on('turn_end', async");
 }
 
-function expectSetupOutput(stdout: string) {
+function expectSetupOutput(stdout: string, harness: 'claude' | 'opencode' | 'pi' = 'pi') {
   expect(stdout).toContain('lasso is ready.');
   expect(stdout).toContain('Created:');
   expect(stdout).toContain('Enabled observers:');
   expect(stdout).toContain('lint (detects recurring corrections');
+  if (harness === 'opencode') {
+    expect(stdout).toContain('Restart opencode');
+    return;
+  }
+  if (harness === 'claude') {
+    expect(stdout).toContain('Restart Claude Code');
+    return;
+  }
   expect(stdout).toContain('Restart Pi or run /reload, then try /lasso status');
+}
+
+async function testClaudeSetupCli() {
+  const cwd = path.join(projectRoot, 'tests', '.tmp_init_cli_claude');
+  await rm(cwd, { force: true, recursive: true });
+  await mkdir(cwd, { recursive: true });
+
+  const setup = await runLasso(cwd, ['setup', '--harness', 'claude']);
+  const hook = await Bun.file(
+    path.join(cwd, '.claude', 'hooks', 'lasso-user-prompt-submit.ts'),
+  ).text();
+  const settings = await Bun.file(path.join(cwd, '.claude', 'settings.json')).json();
+
+  expectSetupOutput(setup.stdout, 'claude');
+  expect(hook).toContain('additionalContext');
+  expect(settings.hooks.UserPromptSubmit[0].matcher).toBe('*');
+
+  await rm(cwd, { force: true, recursive: true });
+}
+
+async function testOpencodeSetupCli() {
+  const cwd = path.join(projectRoot, 'tests', '.tmp_init_cli_opencode');
+  await rm(cwd, { force: true, recursive: true });
+  await mkdir(cwd, { recursive: true });
+
+  const setup = await runLasso(cwd, ['setup', '--harness', 'opencode']);
+  const plugin = await Bun.file(path.join(cwd, '.opencode', 'plugins', 'lasso.ts')).text();
+
+  expectSetupOutput(setup.stdout, 'opencode');
+  expect(plugin).toContain('LassoPlugin');
+  expect(plugin).toContain("'chat.message'");
+
+  await rm(cwd, { force: true, recursive: true });
+}
+
+async function testPiSetupCli() {
+  const cwd = path.join(projectRoot, 'tests', '.tmp_init_cli');
+  await rm(cwd, { force: true, recursive: true });
+  await mkdir(cwd, { recursive: true });
+
+  const setup = await runLasso(cwd, [
+    'setup',
+    '--harness',
+    'pi',
+    '--detector-command',
+    'lasso-detector',
+  ]);
+  const config = await Bun.file(path.join(cwd, '.lasso', 'config.json')).json();
+  const extension = await Bun.file(path.join(cwd, '.pi', 'extensions', 'lasso.ts')).text();
+  const status = await runLasso(cwd, ['status']);
+
+  expectSetupOutput(setup.stdout);
+  expect(config.harness.type).toBe('pi');
+  expect(config.observers.lint.detectorCommand).toBe('lasso-detector');
+  expectGeneratedPiExtension(extension);
+  expect(status.stdout).toContain('Lint Observer Status');
+  expect(status.stdout).toContain('Memory Observer Status');
+
+  await rm(cwd, { force: true, recursive: true });
 }

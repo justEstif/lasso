@@ -14,14 +14,8 @@ import {
   getLintListData,
   getLintShowData,
 } from '../src/observers/lint/commands.ts';
-import {
-  createEntry,
-  recordLintObservationProgress,
-} from '../src/observers/lint/db.ts';
-import {
-  applyDetectorResult,
-  parseDetectorResult,
-} from '../src/observers/lint/detector.ts';
+import { createEntry, recordLintObservationProgress } from '../src/observers/lint/db.ts';
+import { applyDetectorResult, parseDetectorResult } from '../src/observers/lint/detector.ts';
 import { buildLintStatusModel } from '../src/observers/lint/status.ts';
 
 function seedEntry(
@@ -79,17 +73,19 @@ const emptyDetectorOutput = JSON.stringify({
 
 function buildRecurrenceOutput(existingId: string) {
   return JSON.stringify({
-    entries: [{
-      affected_paths: [],
-      category: null,
-      description: 'Recurrence note',
-      matches_existing_id: existingId,
-      proposed_form: null,
-      referenced_date: null,
-      relative_offset: null,
-      severity: 'medium',
-      source_excerpt: 'User: same issue again',
-    }],
+    entries: [
+      {
+        affected_paths: [],
+        category: null,
+        description: 'Recurrence note',
+        matches_existing_id: existingId,
+        proposed_form: null,
+        referenced_date: null,
+        relative_offset: null,
+        severity: 'medium',
+        source_excerpt: 'User: same issue again',
+      },
+    ],
     found_opportunity: true,
     reasoning: 'Matched.',
   });
@@ -160,7 +156,10 @@ describe('lint scan detector - completion', () => {
       db,
       { conversation: 'User: use strict', tokens: 10_000, turns: 10 },
       defaultConfig,
-      (prompt) => { capturedPrompt = prompt; return Promise.resolve(emptyDetectorOutput); },
+      (prompt) => {
+        capturedPrompt = prompt;
+        return Promise.resolve(emptyDetectorOutput);
+      },
     );
     expect(result.type).toBe('completed');
     expect(capturedPrompt).toContain('use strict');

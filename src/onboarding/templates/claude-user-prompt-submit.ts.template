@@ -1,0 +1,46 @@
+const LASSO_COMMAND = ['lasso'];
+
+async function runLasso(args: string[]) {
+  const child = Bun.spawn([...LASSO_COMMAND, ...args], {
+    stderr: 'pipe',
+    stdout: 'pipe',
+  });
+
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+
+  if (exitCode !== 0) {
+    const detail = stderr.trim() || stdout.trim() || `exit ${exitCode}`;
+    throw new Error(`lasso ${args.join(' ')} failed: ${detail}`);
+  }
+
+  return stdout.trim();
+}
+
+async function main() {
+  const input = JSON.parse(await Bun.stdin.text()) as { prompt?: string };
+  const prompt = input.prompt?.trim();
+  const args = ['memory', 'context', '--limit', '10'];
+  if (prompt) args.push('--query', prompt);
+  const context = await runLasso(args);
+
+  console.log(
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'UserPromptSubmit',
+        additionalContext: `# Lasso Memory\n\nUse this project memory when relevant.\n\n${context}`,
+      },
+      suppressOutput: true,
+    }),
+  );
+}
+
+main().catch((error) => {
+  console.error(
+    `lasso memory context unavailable: ${error instanceof Error ? error.message : String(error)}`,
+  );
+  process.exit(0);
+});

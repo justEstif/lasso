@@ -136,7 +136,10 @@ export function checkShouldScanLint(input: LintScanGateInput): LintScanGateResul
   const lintConfig = input.config.observers.lint;
 
   return {
-    saturation: checkSaturation({ activeCount: input.activeCount, limit: lintConfig.throttleLimit }),
+    saturation: checkSaturation({
+      activeCount: input.activeCount,
+      limit: lintConfig.throttleLimit,
+    }),
     tokenBudget: checkTokenBudget({
       currentTokens: input.currentTokens,
       lastObservedTokens: input.lastObservedTokens,
@@ -233,10 +236,7 @@ export function formatLintStatusText(status: LintStatusModel): string {
 /**
  * Return structured list data without any CLI side-effects.
  */
-export function getLintListData(
-  db: LassoDb,
-  opts?: { status?: LintStatus },
-): LintListResult {
+export function getLintListData(db: LassoDb, opts?: { status?: LintStatus }): LintListResult {
   const entries = listEntries(db, opts?.status);
   return {
     entries: entries.map((e) => ({

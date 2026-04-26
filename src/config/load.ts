@@ -4,9 +4,11 @@ import path from 'node:path';
 
 import { resolveLassoPaths } from '../project/paths.ts';
 
+export type HarnessType = 'claude' | 'opencode' | 'pi';
+
 export interface LassoConfig {
   harness: {
-    type: 'pi';
+    type: HarnessType;
   };
   observers: {
     lint: {

@@ -11,7 +11,7 @@ import { formatLintStatusText } from '../observers/lint/commands.ts';
 import { buildLintStatusModel } from '../observers/lint/status.ts';
 import { registerMemoryCli } from '../observers/memory/cli.ts';
 import { getMemoryStatusText } from '../observers/memory/commands.ts';
-import { describeObserver, initProject } from '../onboarding/init.ts';
+import { describeObserver, type HarnessSelection, initProject } from '../onboarding/init.ts';
 import { resolveLassoPaths } from '../project/paths.ts';
 import { handleTui } from '../tui/dashboard.tsx';
 
@@ -51,7 +51,7 @@ function handleDoctor(config: Awaited<ReturnType<typeof loadConfig>>) {
   console.log(`- Database: ok`);
   console.log(`- Lasso path: ${lassoDir}`);
   console.log(`- Harness: ${config.harness.type}`);
-  console.log('- Pi extension: run setup if .pi/extensions/lasso.ts is missing');
+  console.log('- Adapter: run setup if the configured harness files are missing');
 }
 
 function handleGlobalStatus(db: LassoDb, config: Awaited<ReturnType<typeof loadConfig>>) {
@@ -63,13 +63,27 @@ function handleGlobalStatus(db: LassoDb, config: Awaited<ReturnType<typeof loadC
 async function handleSetup(opts: {
   detectorCommand?: string;
   force?: boolean;
-  harness?: 'pi';
+  harness?: HarnessSelection;
   observers?: string;
   yes?: boolean;
 }) {
+  const harness = parseHarnessSelection(opts.harness);
   const { projectRoot } = resolveLassoPaths();
-  const result = await initProject(projectRoot, opts);
+  const result = await initProject(projectRoot, { ...opts, harness });
   printSetupSummary(opts, result);
+}
+
+function nextStepForHarness(harness: HarnessSelection = 'pi') {
+  if (harness === 'opencode')
+    return '  Restart opencode, then ask about remembered project context';
+  if (harness === 'claude')
+    return '  Restart Claude Code, then ask about remembered project context';
+  return '  Restart Pi or run /reload, then try /lasso status';
+}
+
+function parseHarnessSelection(harness: string = 'pi'): HarnessSelection {
+  if (harness === 'pi' || harness === 'opencode' || harness === 'claude') return harness;
+  throw new Error(`Unknown harness: ${harness}. Expected one of: pi, opencode, claude.`);
 }
 
 function printEnabledObservers(observers?: string) {
@@ -86,7 +100,7 @@ function printSetupSection(title: string, files: string[]) {
 }
 
 function printSetupSummary(
-  opts: { harness?: 'pi'; observers?: string },
+  opts: { harness?: HarnessSelection; observers?: string },
   result: Awaited<ReturnType<typeof initProject>>,
 ) {
   console.log('lasso is ready.');
@@ -94,11 +108,7 @@ function printSetupSummary(
   printSetupSection('Skipped existing', result.skipped);
   printEnabledObservers(opts.observers);
   console.log('\nNext:');
-  console.log(
-    (opts.harness ?? 'pi') === 'pi'
-      ? '  Restart Pi or run /reload, then try /lasso status'
-      : '  Run lasso status',
-  );
+  console.log(nextStepForHarness(opts.harness));
 }
 
 function registerGlobalCommands(
@@ -112,8 +122,14 @@ function registerGlobalCommands(
 }
 
 function registerObserverToggleCommands(program: Command) {
-  program.command('enable <observer>').description('Enable an observer').action(async (observer) => updateObserverEnabled(observer, true));
-  program.command('disable <observer>').description('Disable an observer').action(async (observer) => updateObserverEnabled(observer, false));
+  program
+    .command('enable <observer>')
+    .description('Enable an observer')
+    .action(async (observer) => updateObserverEnabled(observer, true));
+  program
+    .command('disable <observer>')
+    .description('Disable an observer')
+    .action(async (observer) => updateObserverEnabled(observer, false));
 }
 
 function registerSetupCommands(program: Command, config: Awaited<ReturnType<typeof loadConfig>>) {
@@ -128,12 +144,15 @@ function registerSetupCommands(program: Command, config: Awaited<ReturnType<type
     .option('--detector-command <command>', 'Lint detector command')
     .option('--advanced', 'Show advanced setup options in help output')
     .option('--force', 'Overwrite existing lasso files')
-    .option('--harness <harness>', 'Harness adapter to install (pi)', 'pi')
+    .option('--harness <harness>', 'Harness adapter to install (pi, opencode, claude)', 'pi')
     .option('--observers <observers>', 'Observers: lint,memory', 'lint,memory')
     .option('--yes', 'Use default setup choices without prompting')
     .action((opts) => handleSetup(opts));
 
-  program.command('doctor').description('Check lasso project setup').action(() => handleDoctor(config));
+  program
+    .command('doctor')
+    .description('Check lasso project setup')
+    .action(() => handleDoctor(config));
 }
 
 function registerStatusAndTuiCommands(
@@ -141,8 +160,15 @@ function registerStatusAndTuiCommands(
   db: LassoDb,
   config: Awaited<ReturnType<typeof loadConfig>>,
 ) {
-  program.command('status').description('Show combined lasso observer status').action(() => handleGlobalStatus(db, config));
-  program.command('tui').description('Open the lasso terminal dashboard').option('--once', 'Render one dashboard frame and exit').action((opts) => handleTui(db, config, opts));
+  program
+    .command('status')
+    .description('Show combined lasso observer status')
+    .action(() => handleGlobalStatus(db, config));
+  program
+    .command('tui')
+    .description('Open the lasso terminal dashboard')
+    .option('--once', 'Render one dashboard frame and exit')
+    .action((opts) => handleTui(db, config, opts));
 }
 
 async function updateObserverEnabled(observer: string, enabled: boolean) {

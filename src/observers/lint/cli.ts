@@ -28,10 +28,24 @@ function registerLintQueryCommands(
   db: LassoDb,
   config: Awaited<ReturnType<typeof loadConfig>>,
 ) {
-  lintCmd.command('list').description('List lint entries').option('--status <status>', 'Filter by status').action((opts) => handleLintList(db, opts));
-  lintCmd.command('show <id>').description('Show full entry detail').action((id) => handleLintShow(db, id));
-  lintCmd.command('status').description('Counts by state, throttle state, last scan time').action(() => handleLintStatus(db, config));
-  lintCmd.command('export').description('Export entries to stdout').option('--format <format>', 'Export format', 'markdown').action((opts) => handleLintExport(db, opts));
+  lintCmd
+    .command('list')
+    .description('List lint entries')
+    .option('--status <status>', 'Filter by status')
+    .action((opts) => handleLintList(db, opts));
+  lintCmd
+    .command('show <id>')
+    .description('Show full entry detail')
+    .action((id) => handleLintShow(db, id));
+  lintCmd
+    .command('status')
+    .description('Counts by state, throttle state, last scan time')
+    .action(() => handleLintStatus(db, config));
+  lintCmd
+    .command('export')
+    .description('Export entries to stdout')
+    .option('--format <format>', 'Export format', 'markdown')
+    .action((opts) => handleLintExport(db, opts));
 }
 
 function registerLintScanCommand(
@@ -47,7 +61,10 @@ function registerLintScanCommand(
     .option('--turns <count>', 'Estimated turn count of the observed conversation')
     .option('--force', 'Run detector even when the scan threshold is not met')
     .option('--detector-output <path>', 'Detector JSON output file')
-    .option('--detector-command <command>', 'Command that reads prompt from stdin and writes detector JSON')
+    .option(
+      '--detector-command <command>',
+      'Command that reads prompt from stdin and writes detector JSON',
+    )
     .option('--print-prompt', 'Print the detector prompt instead of applying results')
     .action((opts) => handleLintScan(db, opts, config));
 }

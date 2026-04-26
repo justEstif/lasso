@@ -37,7 +37,13 @@ export function buildLintStatusModel(db: LassoDb, config: LassoConfig): LintStat
 
 // countLintStatuses kept for backward compat with any callers doing JS-side counting
 export function countLintStatuses(entries: LintEntry[]): Record<LintStatus, number> {
-  const counts: Record<LintStatus, number> = { accepted: 0, deferred: 0, implemented: 0, proposed: 0, rejected: 0 };
+  const counts: Record<LintStatus, number> = {
+    accepted: 0,
+    deferred: 0,
+    implemented: 0,
+    proposed: 0,
+    rejected: 0,
+  };
   for (const entry of entries) counts[entry.status]++;
   return counts;
 }

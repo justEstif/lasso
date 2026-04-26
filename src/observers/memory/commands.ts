@@ -92,7 +92,12 @@ export function checkShouldObserve(
 
 export function executeMemoryObserve(
   db: LassoDb,
-  options: { content: string; force?: boolean; observedTokens: number; scope: 'resource' | 'thread' },
+  options: {
+    content: string;
+    force?: boolean;
+    observedTokens: number;
+    scope: 'resource' | 'thread';
+  },
   config: LassoConfig,
 ) {
   const tokenBudget = checkTokenBudget({
@@ -111,11 +116,7 @@ export function executeMemoryObserve(
   });
 }
 
-export function executeMemoryReflect(
-  db: LassoDb,
-  content: string,
-  limit = 20,
-) {
+export function executeMemoryReflect(db: LassoDb, content: string, limit = 20) {
   const sourceSnapshotIds = listSnapshots(db, limit).map((s) => s.id);
   const reflection = createReflection(db, {
     consolidatedContent: content.trim(),
@@ -154,7 +155,12 @@ export function getMemoryExportText(db: LassoDb, options: MemoryExportOptions = 
   const entries = listEntries(db, { ...filter, limit: 200 });
   const reflections = listReflections(db, 100);
 
-  return ['# Memory Observer Export', '', ...renderReflectionsText(reflections), ...renderEntriesText(entries)].join('\n');
+  return [
+    '# Memory Observer Export',
+    '',
+    ...renderReflectionsText(reflections),
+    ...renderEntriesText(entries),
+  ].join('\n');
 }
 
 export function getMemoryStatusText(db: LassoDb): string {

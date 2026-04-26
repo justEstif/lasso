@@ -3,11 +3,13 @@ import path from 'node:path';
 
 import { defaultConfig } from '../config/load.ts';
 
+export type HarnessSelection = 'claude' | 'opencode' | 'pi';
+
 export interface InitOptions {
   advanced?: boolean;
   detectorCommand?: string;
   force?: boolean;
-  harness?: 'pi';
+  harness?: HarnessSelection;
   observers?: string;
   yes?: boolean;
 }
@@ -19,6 +21,14 @@ export interface InitResult {
 
 export type ObserverSelection = 'lint' | 'memory';
 
+const claudeHookTemplatePath = new URL(
+  'templates/claude-user-prompt-submit.ts.template',
+  import.meta.url,
+);
+const opencodePluginTemplatePath = new URL(
+  'templates/opencode-plugin.ts.template',
+  import.meta.url,
+);
 const piExtensionTemplatePath = new URL('templates/pi-extension.ts.template', import.meta.url);
 
 export function describeObserver(observer: ObserverSelection) {
@@ -36,6 +46,8 @@ export async function initProject(cwd: string, options: InitOptions): Promise<In
 
   await writeConfig(cwd, options, result);
   if (shouldInstallPiAdapter(options)) await writePiExtension(cwd, options, result);
+  if (shouldInstallOpencodeAdapter(options)) await writeOpencodePlugin(cwd, options, result);
+  if (shouldInstallClaudeAdapter(options)) await writeClaudeHook(cwd, options, result);
   await writeGitignore(cwd, result);
 
   return result;
@@ -61,6 +73,14 @@ function buildConfig(options: InitOptions) {
   };
 }
 
+async function claudeHookTemplate() {
+  return Bun.file(claudeHookTemplatePath).text();
+}
+
+async function opencodePluginTemplate() {
+  return Bun.file(opencodePluginTemplatePath).text();
+}
+
 function parseObservers(value = 'lint,memory'): ObserverSelection[] {
   const observers = value.split(',').map((observer) => observer.trim());
   const valid = observers.filter((observer): observer is ObserverSelection => {
@@ -75,8 +95,39 @@ async function piExtensionTemplate() {
   return Bun.file(piExtensionTemplatePath).text();
 }
 
+function shouldInstallClaudeAdapter(options: InitOptions) {
+  return options.harness === 'claude';
+}
+
+function shouldInstallOpencodeAdapter(options: InitOptions) {
+  return options.harness === 'opencode';
+}
+
 function shouldInstallPiAdapter(options: InitOptions) {
   return (options.harness ?? 'pi') === 'pi';
+}
+
+async function writeClaudeHook(cwd: string, options: InitOptions, result: InitResult) {
+  const hookPath = path.join(cwd, '.claude', 'hooks', 'lasso-user-prompt-submit.ts');
+  await writeIfAllowed(hookPath, await claudeHookTemplate(), options, result);
+
+  const settingsPath = path.join(cwd, '.claude', 'settings.json');
+  const settings = {
+    hooks: {
+      UserPromptSubmit: [
+        {
+          hooks: [
+            {
+              command: 'bun "$CLAUDE_PROJECT_DIR"/.claude/hooks/lasso-user-prompt-submit.ts',
+              type: 'command',
+            },
+          ],
+          matcher: '*',
+        },
+      ],
+    },
+  };
+  await writeIfAllowed(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, options, result);
 }
 
 async function writeConfig(cwd: string, options: InitOptions, result: InitResult) {
@@ -117,6 +168,11 @@ async function writeIfAllowed(
   await mkdir(path.dirname(filePath), { recursive: true });
   await Bun.write(filePath, content);
   result.created.push(filePath);
+}
+
+async function writeOpencodePlugin(cwd: string, options: InitOptions, result: InitResult) {
+  const pluginPath = path.join(cwd, '.opencode', 'plugins', 'lasso.ts');
+  await writeIfAllowed(pluginPath, await opencodePluginTemplate(), options, result);
 }
 
 async function writePiExtension(cwd: string, options: InitOptions, result: InitResult) {

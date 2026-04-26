@@ -1,0 +1,62 @@
+const LASSO_COMMAND = ['lasso'];
+const promptBySession = new Map<string, string>();
+
+async function runLasso(args: string[]) {
+  const child = Bun.spawn([...LASSO_COMMAND, ...args], {
+    stderr: 'pipe',
+    stdout: 'pipe',
+  });
+
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+
+  if (exitCode !== 0) {
+    const detail = stderr.trim() || stdout.trim() || `exit ${exitCode}`;
+    throw new Error(`lasso ${args.join(' ')} failed: ${detail}`);
+  }
+
+  return stdout.trim();
+}
+
+function partText(part: unknown): string {
+  if (!part || typeof part !== 'object') return '';
+  const record = part as Record<string, unknown>;
+  for (const key of ['text', 'content']) {
+    const value = record[key];
+    if (typeof value === 'string') return value;
+  }
+  return '';
+}
+
+function messageText(parts: unknown[]) {
+  return parts.map(partText).filter(Boolean).join('\n').trim();
+}
+
+export const LassoPlugin = async () => {
+  return {
+    'chat.message': async (input: { sessionID: string }, output: { parts: unknown[] }) => {
+      const prompt = messageText(output.parts);
+      if (prompt.length > 0) promptBySession.set(input.sessionID, prompt);
+    },
+
+    'experimental.chat.system.transform': async (
+      input: { sessionID?: string },
+      output: { system: string[] },
+    ) => {
+      try {
+        const prompt = input.sessionID ? promptBySession.get(input.sessionID) : undefined;
+        const args = ['memory', 'context', '--limit', '10'];
+        if (prompt) args.push('--query', prompt);
+        const context = await runLasso(args);
+        output.system.push(`\n# Lasso Memory\n\nUse this project memory when relevant.\n\n${context}`);
+      } catch (error) {
+        console.warn(
+          `lasso memory context unavailable: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    },
+  };
+};

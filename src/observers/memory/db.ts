@@ -311,15 +311,15 @@ function findDuplicateSnapshot(db: LassoDb, content: string): MemorySnapshot | n
 function ftsSearch<
   T extends typeof memorySnapshots | typeof observationEntries,
   C extends Record<string, unknown>,
->(db: LassoDb, options: { columns: C; ftsQuery: string; ftsTable: string; limit: number; table: T }) {
+>(
+  db: LassoDb,
+  options: { columns: C; ftsQuery: string; ftsTable: string; limit: number; table: T },
+) {
   const baseTable = options.ftsTable.replace('_fts', '');
   return db
     .select(options.columns as Parameters<typeof db.select>[0])
     .from(options.table)
-    .innerJoin(
-      sql`${sql.raw(options.ftsTable)} fts`,
-      sql`${sql.raw(baseTable)}.rowid = fts.rowid`,
-    )
+    .innerJoin(sql`${sql.raw(options.ftsTable)} fts`, sql`${sql.raw(baseTable)}.rowid = fts.rowid`)
     .where(sql`${sql.raw(options.ftsTable)} MATCH ${options.ftsQuery}`)
     .orderBy(sql`bm25(${sql.raw(options.ftsTable)})`)
     .limit(options.limit)
@@ -345,5 +345,3 @@ function recordSnapshotSeen(db: LassoDb, id: string): MemorySnapshot {
     seen_count: (existing.seen_count ?? 1) + 1,
   } as MemorySnapshot;
 }
-
-
