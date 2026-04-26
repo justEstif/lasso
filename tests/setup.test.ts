@@ -7,8 +7,55 @@ import { describeObserver, initProject } from '../src/onboarding/init.ts';
 describe('project setup', () => {
   test('creates lasso config and does not overwrite without force', testPiSetup);
   test('creates opencode plugin for opencode harness', testOpencodeSetup);
-  test('creates Claude Code hook and settings for claude harness', testClaudeSetup);
+  test('creates Claude Code hooks and settings for claude harness', testClaudeSetup);
 });
+
+interface ClaudeSettings {
+  hooks: {
+    PreCompact: Array<{ hooks: Array<{ command: string }> }>;
+    Stop: Array<{ hooks: Array<{ command: string }> }>;
+    UserPromptSubmit: Array<{ hooks: Array<{ command: string }> }>;
+  };
+}
+
+function assertClaudeFilesCreated(result: { created: string[] }, cwd: string) {
+  expect(result.created).toContain(
+    path.join(cwd, '.claude', 'hooks', 'lasso-user-prompt-submit.ts'),
+  );
+  expect(result.created).toContain(path.join(cwd, '.claude', 'hooks', 'lasso-stop.ts'));
+  expect(result.created).toContain(path.join(cwd, '.claude', 'hooks', 'lasso-pre-compact.ts'));
+  expect(result.created).toContain(path.join(cwd, '.claude', 'settings.json'));
+}
+
+function assertClaudeSettings(settings: ClaudeSettings) {
+  expect(settings.hooks.UserPromptSubmit[0]!.hooks[0]!.command).toContain(
+    'lasso-user-prompt-submit.ts',
+  );
+  expect(settings.hooks.Stop[0]!.hooks[0]!.command).toContain('lasso-stop.ts');
+  expect(settings.hooks.PreCompact[0]!.hooks[0]!.command).toContain('lasso-pre-compact.ts');
+}
+
+function assertOpencodePluginLifecycle(plugin: string) {
+  expect(plugin).toContain("'experimental.chat.system.transform'");
+  expect(plugin).toContain("'experimental.session.compacting'");
+  expect(plugin).toContain("'chat.message'");
+  expect(plugin).toContain("'event'");
+  expect(plugin).toContain("['memory', 'context', '--limit', '10']");
+  expect(plugin).toContain("['memory', 'should-observe'");
+  expect(plugin).toContain("['memory', 'should-reflect']");
+  expect(plugin).toContain("['lint', 'scan']");
+  expect(plugin).toContain("['memory', 'observe'");
+}
+
+async function readClaudeHooks(cwd: string) {
+  return {
+    compact: await Bun.file(path.join(cwd, '.claude', 'hooks', 'lasso-pre-compact.ts')).text(),
+    stop: await Bun.file(path.join(cwd, '.claude', 'hooks', 'lasso-stop.ts')).text(),
+    submit: await Bun.file(
+      path.join(cwd, '.claude', 'hooks', 'lasso-user-prompt-submit.ts'),
+    ).text(),
+  };
+}
 
 async function testClaudeSetup() {
   const cwd = path.join(process.cwd(), 'tests', '.tmp_init_claude');
@@ -17,20 +64,18 @@ async function testClaudeSetup() {
 
   const result = await initProject(cwd, { harness: 'claude' });
   const config = await Bun.file(path.join(cwd, '.lasso', 'config.json')).json();
-  const hook = await Bun.file(
-    path.join(cwd, '.claude', 'hooks', 'lasso-user-prompt-submit.ts'),
-  ).text();
-  const settings = await Bun.file(path.join(cwd, '.claude', 'settings.json')).json();
+  const hooks = await readClaudeHooks(cwd);
+  const settings = (await Bun.file(
+    path.join(cwd, '.claude', 'settings.json'),
+  ).json()) as ClaudeSettings;
 
-  expect(result.created).toContain(
-    path.join(cwd, '.claude', 'hooks', 'lasso-user-prompt-submit.ts'),
-  );
-  expect(result.created).toContain(path.join(cwd, '.claude', 'settings.json'));
+  assertClaudeFilesCreated(result, cwd);
   expect(config.harness.type).toBe('claude');
-  expect(hook).toContain("hookEventName: 'UserPromptSubmit'");
-  expect(settings.hooks.UserPromptSubmit[0].hooks[0].command).toContain(
-    'lasso-user-prompt-submit.ts',
-  );
+  expect(hooks.submit).toContain("hookEventName: 'UserPromptSubmit'");
+  expect(hooks.stop).toContain('should-observe');
+  expect(hooks.stop).toContain('scan');
+  expect(hooks.compact).toContain('should-reflect');
+  assertClaudeSettings(settings);
 
   await rm(cwd, { force: true, recursive: true });
 }
@@ -46,8 +91,7 @@ async function testOpencodeSetup() {
 
   expect(result.created).toContain(path.join(cwd, '.opencode', 'plugins', 'lasso.ts'));
   expect(config.harness.type).toBe('opencode');
-  expect(plugin).toContain("'experimental.chat.system.transform'");
-  expect(plugin).toContain("['memory', 'context', '--limit', '10']");
+  assertOpencodePluginLifecycle(plugin);
 
   await rm(cwd, { force: true, recursive: true });
 }

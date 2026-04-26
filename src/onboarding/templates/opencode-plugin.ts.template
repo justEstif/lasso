@@ -1,5 +1,6 @@
 const LASSO_COMMAND = ['lasso'];
 const promptBySession = new Map<string, string>();
+let lastObservedTokens = 0;
 
 async function runLasso(args: string[]) {
   const child = Bun.spawn([...LASSO_COMMAND, ...args], {
@@ -35,6 +36,41 @@ function messageText(parts: unknown[]) {
   return parts.map(partText).filter(Boolean).join('\n').trim();
 }
 
+async function shouldObserve(tokens: number): Promise<boolean> {
+  try {
+    const result = await runLasso(['memory', 'should-observe', '--tokens', String(tokens)]);
+    return result.includes('"needed":true');
+  } catch {
+    return false;
+  }
+}
+
+async function shouldReflect(): Promise<boolean> {
+  try {
+    const result = await runLasso(['memory', 'should-reflect']);
+    return result.includes('"needed":true');
+  } catch {
+    return false;
+  }
+}
+
+async function observeConversation(conversation: string, tokens: number) {
+  await Promise.all([
+    runLasso(['lint', 'scan'], { input: conversation }).catch(() => {}),
+    runLasso(['memory', 'observe', '--tokens', String(tokens)], { input: conversation }),
+  ]);
+  lastObservedTokens = tokens;
+}
+
+async function triggerReflection() {
+  try {
+    const context = await runLasso(['memory', 'context', '--limit', '20']);
+    if (context) await runLasso(['memory', 'reflect'], { input: context });
+  } catch {
+    // Non-critical — reflection will be retried on next threshold breach
+  }
+}
+
 export const LassoPlugin = async () => {
   return {
     'chat.message': async (input: { sessionID: string }, output: { parts: unknown[] }) => {
@@ -48,14 +84,74 @@ export const LassoPlugin = async () => {
     ) => {
       try {
         const prompt = input.sessionID ? promptBySession.get(input.sessionID) : undefined;
-        const args = ['memory', 'context', '--limit', '10'];
-        if (prompt) args.push('--query', prompt);
-        const context = await runLasso(args);
-        output.system.push(`\n# Lasso Memory\n\nUse this project memory when relevant.\n\n${context}`);
+        const contextArgs = ['memory', 'context', '--limit', '10'];
+        if (prompt) contextArgs.push('--query', prompt);
+        const context = await runLasso(contextArgs);
+
+        const workingArgs = ['memory', 'working'];
+        const working = await runLasso(workingArgs);
+
+        const sections: string[] = [];
+        if (context && !context.includes('No relevant memory found')) {
+          sections.push(`# Lasso Memory\n\n${context}`);
+        }
+        if (working && !working.includes('No working memory found')) {
+          sections.push(`# Lasso Working Memory\n\n${working}`);
+        }
+
+        if (sections.length > 0) {
+          output.system.push(`\n${sections.join('\n\n')}`);
+        }
       } catch (error) {
         console.warn(
           `lasso memory context unavailable: ${error instanceof Error ? error.message : String(error)}`,
         );
+      }
+    },
+
+    'event': async ({ event }: { event: { type: string } }) => {
+      if (event.type === 'session.idle') {
+        try {
+          const tokens = lastObservedTokens;
+          if (tokens > 0 && (await shouldObserve(tokens))) {
+            await runLasso(['memory', 'observe', '--tokens', String(tokens), '--force'], {
+              input: `Session completed with ~${tokens} tokens.`,
+            });
+          }
+          if (await shouldReflect()) {
+            await triggerReflection();
+          }
+        } catch {
+          // Non-critical
+        }
+      }
+    },
+
+    'experimental.session.compacting': async (
+      _input: { sessionID: string },
+      output: { context: string[]; prompt?: string },
+    ) => {
+      try {
+        const context = await runLasso(['memory', 'context', '--limit', '20']);
+        const working = await runLasso(['memory', 'working']);
+
+        const sections: string[] = [];
+        if (context && !context.includes('No relevant memory found')) {
+          sections.push(`Lasso memory context for compaction:\n${context}`);
+        }
+        if (working && !working.includes('No working memory found')) {
+          sections.push(`Lasso working memory:\n${working}`);
+        }
+
+        if (sections.length > 0) {
+          output.context.push(sections.join('\n\n'));
+        }
+
+        if (await shouldReflect()) {
+          await triggerReflection();
+        }
+      } catch {
+        // Non-critical — don't block compaction
       }
     },
   };

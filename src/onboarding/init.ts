@@ -25,6 +25,11 @@ const claudeHookTemplatePath = new URL(
   'templates/claude-user-prompt-submit.ts.template',
   import.meta.url,
 );
+const claudePreCompactTemplatePath = new URL(
+  'templates/claude-pre-compact.ts.template',
+  import.meta.url,
+);
+const claudeStopTemplatePath = new URL('templates/claude-stop.ts.template', import.meta.url);
 const opencodePluginTemplatePath = new URL(
   'templates/opencode-plugin.ts.template',
   import.meta.url,
@@ -53,6 +58,16 @@ export async function initProject(cwd: string, options: InitOptions): Promise<In
   return result;
 }
 
+function buildClaudeSettings() {
+  return {
+    hooks: {
+      PreCompact: [claudeHookEntry('lasso-pre-compact.ts')],
+      Stop: [claudeHookEntry('lasso-stop.ts')],
+      UserPromptSubmit: [claudeHookEntry('lasso-user-prompt-submit.ts')],
+    },
+  };
+}
+
 function buildConfig(options: InitOptions) {
   const observers = parseObservers(options.observers);
   return {
@@ -73,8 +88,23 @@ function buildConfig(options: InitOptions) {
   };
 }
 
+function claudeHookEntry(script: string) {
+  return {
+    hooks: [{ command: `bun "$CLAUDE_PROJECT_DIR"/.claude/hooks/${script}`, type: 'command' }],
+    matcher: '*',
+  };
+}
+
 async function claudeHookTemplate() {
   return Bun.file(claudeHookTemplatePath).text();
+}
+
+async function claudePreCompactTemplate() {
+  return Bun.file(claudePreCompactTemplatePath).text();
+}
+
+async function claudeStopTemplate() {
+  return Bun.file(claudeStopTemplatePath).text();
 }
 
 async function opencodePluginTemplate() {
@@ -108,26 +138,40 @@ function shouldInstallPiAdapter(options: InitOptions) {
 }
 
 async function writeClaudeHook(cwd: string, options: InitOptions, result: InitResult) {
-  const hookPath = path.join(cwd, '.claude', 'hooks', 'lasso-user-prompt-submit.ts');
-  await writeIfAllowed(hookPath, await claudeHookTemplate(), options, result);
+  const hooksDir = path.join(cwd, '.claude', 'hooks');
+  await writeClaudeHookFiles(hooksDir, options, result);
+  await writeClaudeSettings(cwd, options, result);
+}
 
+async function writeClaudeHookFiles(hooksDir: string, options: InitOptions, result: InitResult) {
+  await writeIfAllowed(
+    path.join(hooksDir, 'lasso-user-prompt-submit.ts'),
+    await claudeHookTemplate(),
+    options,
+    result,
+  );
+  await writeIfAllowed(
+    path.join(hooksDir, 'lasso-stop.ts'),
+    await claudeStopTemplate(),
+    options,
+    result,
+  );
+  await writeIfAllowed(
+    path.join(hooksDir, 'lasso-pre-compact.ts'),
+    await claudePreCompactTemplate(),
+    options,
+    result,
+  );
+}
+
+async function writeClaudeSettings(cwd: string, options: InitOptions, result: InitResult) {
   const settingsPath = path.join(cwd, '.claude', 'settings.json');
-  const settings = {
-    hooks: {
-      UserPromptSubmit: [
-        {
-          hooks: [
-            {
-              command: 'bun "$CLAUDE_PROJECT_DIR"/.claude/hooks/lasso-user-prompt-submit.ts',
-              type: 'command',
-            },
-          ],
-          matcher: '*',
-        },
-      ],
-    },
-  };
-  await writeIfAllowed(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, options, result);
+  await writeIfAllowed(
+    settingsPath,
+    `${JSON.stringify(buildClaudeSettings(), null, 2)}\n`,
+    options,
+    result,
+  );
 }
 
 async function writeConfig(cwd: string, options: InitOptions, result: InitResult) {

@@ -23,8 +23,8 @@ async function runLasso(cwd: string, args: string[]) {
 
 describe('setup CLI integration', () => {
   test('setup creates config and optional Pi extension', testPiSetupCli);
-  test('setup creates opencode plugin', testOpencodeSetupCli);
-  test('setup creates Claude Code hook settings', testClaudeSetupCli);
+  test('setup creates opencode plugin with full lifecycle', testOpencodeSetupCli);
+  test('setup creates Claude Code hooks with full lifecycle', testClaudeSetupCli);
 });
 
 function expectGeneratedPiExtension(extension: string) {
@@ -73,14 +73,26 @@ async function testClaudeSetupCli() {
   await mkdir(cwd, { recursive: true });
 
   const setup = await runLasso(cwd, ['setup', '--harness', 'claude']);
-  const hook = await Bun.file(
+  const submitHook = await Bun.file(
     path.join(cwd, '.claude', 'hooks', 'lasso-user-prompt-submit.ts'),
+  ).text();
+  const stopHook = await Bun.file(path.join(cwd, '.claude', 'hooks', 'lasso-stop.ts')).text();
+  const compactHook = await Bun.file(
+    path.join(cwd, '.claude', 'hooks', 'lasso-pre-compact.ts'),
   ).text();
   const settings = await Bun.file(path.join(cwd, '.claude', 'settings.json')).json();
 
   expectSetupOutput(setup.stdout, 'claude');
-  expect(hook).toContain('additionalContext');
+  expect(submitHook).toContain('additionalContext');
+  expect(stopHook).toContain('memory');
+  expect(stopHook).toContain('observe');
+  expect(stopHook).toContain('lint');
+  expect(stopHook).toContain('scan');
+  expect(compactHook).toContain('memory');
+  expect(compactHook).toContain('reflect');
   expect(settings.hooks.UserPromptSubmit[0].matcher).toBe('*');
+  expect(settings.hooks.Stop[0].matcher).toBe('*');
+  expect(settings.hooks.PreCompact[0].matcher).toBe('*');
 
   await rm(cwd, { force: true, recursive: true });
 }
@@ -96,6 +108,11 @@ async function testOpencodeSetupCli() {
   expectSetupOutput(setup.stdout, 'opencode');
   expect(plugin).toContain('LassoPlugin');
   expect(plugin).toContain("'chat.message'");
+  expect(plugin).toContain("'experimental.chat.system.transform'");
+  expect(plugin).toContain("'experimental.session.compacting'");
+  expect(plugin).toContain("'event'");
+  expect(plugin).toContain('should-observe');
+  expect(plugin).toContain('should-reflect');
 
   await rm(cwd, { force: true, recursive: true });
 }

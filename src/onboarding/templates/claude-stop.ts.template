@@ -1,0 +1,71 @@
+const LASSO_COMMAND = ['lasso'];
+
+async function runLasso(args: string[], input?: string) {
+  const child = Bun.spawn([...LASSO_COMMAND, ...args], {
+    stderr: 'pipe',
+    stdin: input ? 'pipe' : 'ignore',
+    stdout: 'pipe',
+  });
+
+  if (input && child.stdin) {
+    child.stdin.write(input);
+    child.stdin.end();
+  }
+
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+
+  if (exitCode !== 0) {
+    const detail = stderr.trim() || stdout.trim() || `exit ${exitCode}`;
+    throw new Error(`lasso ${args.join(' ')} failed: ${detail}`);
+  }
+
+  return stdout.trim();
+}
+
+async function main() {
+  const input = JSON.parse(await Bun.stdin.text()) as {
+    transcript_path?: string;
+    last_assistant_message?: string;
+  };
+
+  try {
+    // Estimate tokens from last assistant message
+    const text = input.last_assistant_message ?? '';
+    const tokens = Math.ceil(text.length / 4);
+    if (tokens < 100) {
+      // Too little content to observe
+      process.exit(0);
+      return;
+    }
+
+    // Check if observation is needed
+    const check = await runLasso(['memory', 'should-observe', '--tokens', String(tokens)]);
+    if (!check.includes('"needed":true')) {
+      process.exit(0);
+      return;
+    }
+
+    // Observe + lint scan in parallel
+    await Promise.all([
+      runLasso(['memory', 'observe', '--tokens', String(tokens)], { input: text }).catch(() => {}),
+      runLasso(['lint', 'scan'], { input: text }).catch(() => {}),
+    ]);
+
+    // Check if reflection is needed
+    const reflectCheck = await runLasso(['memory', 'should-reflect']);
+    if (reflectCheck.includes('"needed":true')) {
+      const context = await runLasso(['memory', 'context', '--limit', '20']);
+      if (context) await runLasso(['memory', 'reflect'], { input: context });
+    }
+  } catch {
+    // Non-critical — don't block Claude from stopping
+  }
+
+  process.exit(0);
+}
+
+main();

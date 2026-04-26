@@ -1,10 +1,16 @@
 const LASSO_COMMAND = ['lasso'];
 
-async function runLasso(args: string[]) {
+async function runLasso(args: string[], input?: string) {
   const child = Bun.spawn([...LASSO_COMMAND, ...args], {
     stderr: 'pipe',
+    stdin: input ? 'pipe' : 'ignore',
     stdout: 'pipe',
   });
+
+  if (input && child.stdin) {
+    child.stdin.write(input);
+    child.stdin.end();
+  }
 
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(child.stdout).text(),
@@ -21,17 +27,33 @@ async function runLasso(args: string[]) {
 }
 
 async function main() {
-  const input = JSON.parse(await Bun.stdin.text()) as { prompt?: string };
+  const input = JSON.parse(await Bun.stdin.text()) as {
+    prompt?: string;
+    transcript_path?: string;
+  };
   const prompt = input.prompt?.trim();
   const args = ['memory', 'context', '--limit', '10'];
   if (prompt) args.push('--query', prompt);
   const context = await runLasso(args);
 
+  const working = await runLasso(['memory', 'working']);
+
+  const sections: string[] = [];
+  if (context && !context.includes('No relevant memory found')) {
+    sections.push(`# Lasso Memory\n\n${context}`);
+  }
+  if (working && !working.includes('No working memory found')) {
+    sections.push(`# Lasso Working Memory\n\n${working}`);
+  }
+
+  const additionalContext =
+    sections.length > 0 ? sections.join('\n\n') : '';
+
   console.log(
     JSON.stringify({
       hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
-        additionalContext: `# Lasso Memory\n\nUse this project memory when relevant.\n\n${context}`,
+        additionalContext,
       },
       suppressOutput: true,
     }),
