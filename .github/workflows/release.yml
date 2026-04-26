@@ -32,7 +32,7 @@ jobs:
       - name: Set version from tag
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          bun pm pkg set version "$VERSION"
+          bun pm pkg set version="$VERSION"
 
       - name: Validate
         run: |
