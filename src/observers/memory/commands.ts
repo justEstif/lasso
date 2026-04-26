@@ -1,4 +1,4 @@
-import { Database } from 'bun:sqlite';
+import type { LassoDb } from '../../db/index.ts';
 
 import type { LassoConfig } from '../../config/load.ts';
 
@@ -74,7 +74,7 @@ interface MemoryWorkingOptions {
 }
 
 export function checkShouldObserve(
-  db: Database,
+  db: LassoDb,
   currentTokens: number,
   config: LassoConfig,
 ): ShouldObserveResult {
@@ -87,7 +87,7 @@ export function checkShouldObserve(
   });
 }
 
-export function handleMemoryContext(db: Database, options: MemoryContextOptions) {
+export function handleMemoryContext(db: LassoDb, options: MemoryContextOptions) {
   const filter = buildEntryFilter(options);
   const entries = options.query
     ? searchEntries(db, options.query, { ...filter, limit: Number(options.limit ?? 10) })
@@ -107,7 +107,7 @@ export function handleMemoryContext(db: Database, options: MemoryContextOptions)
   }
 }
 
-export function handleMemoryExport(db: Database, options: MemoryExportOptions = {}) {
+export function handleMemoryExport(db: LassoDb, options: MemoryExportOptions = {}) {
   const filter = buildEntryFilter(options);
   const entries = listEntries(db, { ...filter, limit: 200 });
   const reflections = listReflections(db, 100);
@@ -118,7 +118,7 @@ export function handleMemoryExport(db: Database, options: MemoryExportOptions = 
 }
 
 export async function handleMemoryObserve(
-  db: Database,
+  db: LassoDb,
   options: MemoryObserveOptions,
   config: LassoConfig,
 ) {
@@ -142,7 +142,7 @@ export async function handleMemoryObserve(
   );
 }
 
-export async function handleMemoryReflect(db: Database, options: MemoryReflectOptions) {
+export async function handleMemoryReflect(db: LassoDb, options: MemoryReflectOptions) {
   const content = await readMemoryContent(options);
   if (content.trim().length === 0) {
     console.error('memory reflect needs --content <text>, --input <path>, or stdin content.');
@@ -162,17 +162,13 @@ export async function handleMemoryReflect(db: Database, options: MemoryReflectOp
   );
 }
 
-export function handleMemoryShouldObserve(
-  db: Database,
-  currentTokens: number,
-  config: LassoConfig,
-) {
+export function handleMemoryShouldObserve(db: LassoDb, currentTokens: number, config: LassoConfig) {
   const result = checkShouldObserve(db, currentTokens, config);
   console.log(JSON.stringify(result));
   process.exit(result.needed ? 0 : 1);
 }
 
-export function handleMemoryShouldReflect(db: Database, config: LassoConfig) {
+export function handleMemoryShouldReflect(db: LassoDb, config: LassoConfig) {
   const scope = config.observers.memory.scope;
   const threshold = config.observers.memory.reflectionThreshold;
   const result = checkShouldReflect(db, scope, threshold);
@@ -180,7 +176,7 @@ export function handleMemoryShouldReflect(db: Database, config: LassoConfig) {
   process.exit(result.needed ? 0 : 1);
 }
 
-export function handleMemoryStatus(db: Database) {
+export function handleMemoryStatus(db: LassoDb) {
   const status = buildMemoryStatusModel(db);
 
   console.log('Memory Observer Status:');
@@ -191,7 +187,7 @@ export function handleMemoryStatus(db: Database) {
   console.log(`Last reflection: ${status.lastReflection}`);
 }
 
-export function handleMemoryWorking(db: Database, options: MemoryWorkingOptions) {
+export function handleMemoryWorking(db: LassoDb, options: MemoryWorkingOptions) {
   if (options.edit) return handleWorkingEdit(db, options);
   if (options.init) return handleWorkingInit(db, options);
   if (options.reset) return handleWorkingReset(db, options);
@@ -238,7 +234,7 @@ function groupByCategory(entries: ReturnType<typeof listEntries>) {
   return groups;
 }
 
-function handleWorkingEdit(db: Database, options: MemoryWorkingOptions) {
+function handleWorkingEdit(db: LassoDb, options: MemoryWorkingOptions) {
   const content = options.stdin?.trim();
   if (!content) {
     console.error('memory working --edit needs content via stdin.');
@@ -253,7 +249,7 @@ function handleWorkingEdit(db: Database, options: MemoryWorkingOptions) {
   console.log(`Working memory ${record.id} updated.`);
 }
 
-function handleWorkingInit(db: Database, options: MemoryWorkingOptions) {
+function handleWorkingInit(db: LassoDb, options: MemoryWorkingOptions) {
   const existing = getWorkingMemory(db, {
     resourceId: options.resource_id,
     threadId: options.thread_id,
@@ -271,7 +267,7 @@ function handleWorkingInit(db: Database, options: MemoryWorkingOptions) {
   console.log(`Working memory ${record.id} initialized with default template.`);
 }
 
-function handleWorkingReset(db: Database, options: MemoryWorkingOptions) {
+function handleWorkingReset(db: LassoDb, options: MemoryWorkingOptions) {
   const record = upsertWorkingMemory(db, {
     content: getDefaultTemplate(),
     resourceId: options.resource_id,
@@ -280,7 +276,7 @@ function handleWorkingReset(db: Database, options: MemoryWorkingOptions) {
   console.log(`Working memory ${record.id} reset to default template.`);
 }
 
-function handleWorkingShow(db: Database, options: MemoryWorkingOptions) {
+function handleWorkingShow(db: LassoDb, options: MemoryWorkingOptions) {
   const record = getWorkingMemory(db, {
     resourceId: options.resource_id,
     threadId: options.thread_id,

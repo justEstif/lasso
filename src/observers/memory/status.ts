@@ -1,4 +1,4 @@
-import type { Database } from 'bun:sqlite';
+import type { LassoDb } from '../../db/index.ts';
 
 import type { MemoryReflection, MemorySnapshot } from './db.ts';
 
@@ -26,7 +26,7 @@ export interface MemoryStatusModel {
  * The model hides which repository calls are needed for counts vs. recency so
  * display surfaces can stay focused on presentation.
  */
-export function buildMemoryStatusModel(db: Database): MemoryStatusModel {
+export function buildMemoryStatusModel(db: LassoDb): MemoryStatusModel {
   const recentSnapshots = listSnapshots(db, 5);
   const recentReflections = listReflections(db, 3);
 

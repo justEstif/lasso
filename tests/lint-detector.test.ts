@@ -1,7 +1,7 @@
-import { Database } from 'bun:sqlite';
 import { describe, expect, test } from 'bun:test';
 
-import { runMigrations } from '../src/db/migrations.ts';
+import { getMemoryDb } from '../src/db/index';
+import { runMigrations } from '../src/db/migrations';
 import { getRecurrences, listEntries } from '../src/observers/lint/db.ts';
 import {
   applyDetectorResult,
@@ -10,7 +10,7 @@ import {
 } from '../src/observers/lint/detector.ts';
 
 function createMigratedDatabase() {
-  const db = new Database(':memory:');
+  const db = getMemoryDb();
   runMigrations(db);
   return db;
 }

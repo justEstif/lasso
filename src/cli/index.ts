@@ -1,5 +1,6 @@
-import { Database } from 'bun:sqlite';
 import { Command } from 'commander';
+
+import type { LassoDb } from '../db/index.ts';
 
 import packageJson from '../../package.json';
 import { loadConfig, setObserverEnabled } from '../config/load.ts';
@@ -56,7 +57,7 @@ function describeConfiguredObservers(value = 'lint,memory') {
     );
 }
 
-function handleDoctor(db: Database, config: Awaited<ReturnType<typeof loadConfig>>) {
+function handleDoctor(db: LassoDb, config: Awaited<ReturnType<typeof loadConfig>>) {
   const { lassoDir } = resolveLassoPaths();
   console.log('lasso doctor');
   console.log(`- Config: ${config ? 'ok' : 'missing'}`);
@@ -66,7 +67,7 @@ function handleDoctor(db: Database, config: Awaited<ReturnType<typeof loadConfig
   console.log('- Pi extension: run setup if .pi/extensions/lasso.ts is missing');
 }
 
-function handleGlobalStatus(db: Database, config: Awaited<ReturnType<typeof loadConfig>>) {
+function handleGlobalStatus(db: LassoDb, config: Awaited<ReturnType<typeof loadConfig>>) {
   handleLintStatus(db, config);
   console.log('');
   handleMemoryStatus(db);
@@ -120,7 +121,7 @@ async function readStdinContent(): Promise<string | undefined> {
 
 function registerGlobalCommands(
   program: Command,
-  db: Database,
+  db: LassoDb,
   config: Awaited<ReturnType<typeof loadConfig>>,
 ) {
   program
@@ -159,7 +160,7 @@ function registerGlobalCommands(
 
 function registerLintCommands(
   program: Command,
-  db: Database,
+  db: LassoDb,
   config: Awaited<ReturnType<typeof loadConfig>>,
 ) {
   const lintCmd = program.command('lint').description('Lint observer commands');
@@ -198,7 +199,7 @@ function registerLintCommands(
     .action((opts) => handleLintExport(db, opts));
 }
 
-function registerLintTransitionCommands(lintCmd: Command, db: Database) {
+function registerLintTransitionCommands(lintCmd: Command, db: LassoDb) {
   lintCmd
     .command('accept <id>')
     .description('Transition to accepted')
@@ -219,7 +220,7 @@ function registerLintTransitionCommands(lintCmd: Command, db: Database) {
 
 function registerMemoryCommands(
   program: Command,
-  db: Database,
+  db: LassoDb,
   config: Awaited<ReturnType<typeof loadConfig>>,
 ) {
   const memoryCmd = program.command('memory').description('Memory observer commands');
@@ -250,7 +251,7 @@ function registerMemoryCommands(
 
 function registerMemoryObserveCheck(
   memoryCmd: Command,
-  db: Database,
+  db: LassoDb,
   config: Awaited<ReturnType<typeof loadConfig>>,
 ) {
   memoryCmd
@@ -260,7 +261,7 @@ function registerMemoryObserveCheck(
     .action((opts) => handleMemoryShouldObserve(db, Number(opts.tokens), config));
 }
 
-function registerMemoryReflectAndContext(memoryCmd: Command, db: Database) {
+function registerMemoryReflectAndContext(memoryCmd: Command, db: LassoDb) {
   memoryCmd
     .command('reflect')
     .description('Record a consolidated memory reflection')
@@ -285,7 +286,7 @@ function registerMemoryReflectAndContext(memoryCmd: Command, db: Database) {
 
 function registerMemoryReflectCheck(
   memoryCmd: Command,
-  db: Database,
+  db: LassoDb,
   config: Awaited<ReturnType<typeof loadConfig>>,
 ) {
   memoryCmd
@@ -294,7 +295,7 @@ function registerMemoryReflectCheck(
     .action(() => handleMemoryShouldReflect(db, config));
 }
 
-function registerMemoryWorkingCommand(memoryCmd: Command, db: Database) {
+function registerMemoryWorkingCommand(memoryCmd: Command, db: LassoDb) {
   memoryCmd
     .command('working')
     .description('View or manage working memory scratchpad')
@@ -327,7 +328,7 @@ function registerObserverToggleCommands(program: Command) {
 
 function registerStatusAndTuiCommands(
   program: Command,
-  db: Database,
+  db: LassoDb,
   config: Awaited<ReturnType<typeof loadConfig>>,
 ) {
   program
