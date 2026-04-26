@@ -5,6 +5,8 @@ import type { LintStatus } from '../src/observers/lint/db.ts';
 import { defaultConfig } from '../src/config/load.ts';
 import { getMemoryDb } from '../src/db/index';
 import { runMigrations } from '../src/db/migrations';
+import { createEntry, recordLintObservationProgress } from '../src/observers/lint/db.ts';
+import { applyDetectorResult, parseDetectorResult } from '../src/observers/lint/detector.ts';
 import {
   buildLintExportMarkdown,
   checkShouldScanLint,
@@ -13,9 +15,7 @@ import {
   formatLintStatusText,
   getLintListData,
   getLintShowData,
-} from '../src/observers/lint/commands.ts';
-import { createEntry, recordLintObservationProgress } from '../src/observers/lint/db.ts';
-import { applyDetectorResult, parseDetectorResult } from '../src/observers/lint/detector.ts';
+} from '../src/observers/lint/orchestration.ts';
 import { buildLintStatusModel } from '../src/observers/lint/status.ts';
 
 function seedEntry(

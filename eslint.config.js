@@ -6,7 +6,7 @@ import unicorn from 'eslint-plugin-unicorn';
 import tseslint from 'typescript-eslint';
 
 const cliCommandFiles = {
-  files: ['**/cli/**/*.ts', '**/observers/**/commands.ts'],
+  files: ['**/cli/**/*.ts', '**/observers/**/commands.ts', '**/observers/**/handlers.ts'],
 };
 
 export default tseslint.config(

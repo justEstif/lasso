@@ -10,7 +10,7 @@ import {
   handleLintShow,
   handleLintStatus,
   handleLintTransition,
-} from './commands.ts';
+} from './handlers.ts';
 
 export function registerLintCli(
   program: Command,

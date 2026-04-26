@@ -12,7 +12,7 @@ import {
   handleMemoryShouldReflect,
   handleMemoryStatus,
   handleMemoryWorking,
-} from './commands.ts';
+} from './handlers.ts';
 
 export function registerMemoryCli(
   program: Command,

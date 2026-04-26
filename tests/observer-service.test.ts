@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { defaultConfig } from '../src/config/load.ts';
-import { checkShouldScanLint } from '../src/observers/lint/commands.ts';
+import { checkShouldScanLint } from '../src/observers/lint/orchestration.ts';
 import {
   checkSaturation,
   checkTokenBudget,
