@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { getMemoryDb } from '../src/db/index';
+import { ensureFtsIndexes, getMemoryDb } from '../src/db/index';
 import { runMigrations } from '../src/db/migrations';
 import {
   checkShouldReflect,
@@ -25,6 +25,7 @@ function expectMemoryRecords(db: ReturnType<typeof memoryDb>) {
 function memoryDb() {
   const db = getMemoryDb();
   runMigrations(db);
+  ensureFtsIndexes(db);
   return db;
 }
 

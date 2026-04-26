@@ -1,7 +1,6 @@
 import { and, asc, desc, eq, gte, isNull, lte, sql } from 'drizzle-orm';
 
 import type { LassoDb } from '../../db/index.ts';
-
 import type { ObservationPriority, ParsedEntry } from './parser.ts';
 
 import {
@@ -234,25 +233,72 @@ export function searchEntries(
   query: string,
   options: EntryFilterOptions = {},
 ): ObservationEntry[] {
-  const queryTokens = new Set(query.toLowerCase().match(/[a-z0-9][a-z0-9_.:/-]{2,}/g));
-  const entries = listEntries(db, { ...options, limit: 200 });
+  const limit = options.limit ?? 10;
+  const ftsQuery = query
+    .toLowerCase()
+    .replaceAll(/[^\w]/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(' OR ');
 
-  return entries
-    .map((entry) => ({ entry, score: scoreContent(entry.content, queryTokens) }))
-    .filter((result) => result.score > 0)
-    .toSorted((left, right) => right.score - left.score)
-    .slice(0, options.limit ?? 10)
-    .map((result) => result.entry);
+  if (!ftsQuery) return [];
+
+  return db
+    .select({
+      category: observationEntries.category,
+      content: observationEntries.content,
+      created_at: observationEntries.created_at,
+      id: observationEntries.id,
+      observed_at: observationEntries.observed_at,
+      priority: observationEntries.priority,
+      referenced_date: observationEntries.referenced_date,
+      relative_offset: observationEntries.relative_offset,
+      snapshot_id: observationEntries.snapshot_id,
+    })
+    .from(observationEntries)
+    .innerJoin(
+      sql`observation_entries_fts fts`,
+      sql`observation_entries.rowid = fts.rowid`,
+    )
+    .where(sql`observation_entries_fts MATCH ${ftsQuery}`)
+    .orderBy(sql`bm25(observation_entries_fts)`)
+    .limit(limit)
+    .all();
 }
 
 export function searchSnapshots(db: LassoDb, query: string, limit = 5): MemorySnapshot[] {
-  const queryTokens = new Set(query.toLowerCase().match(/[a-z0-9][a-z0-9_.:/-]{2,}/g));
-  return listSnapshots(db, 100)
-    .map((snapshot) => ({ score: scoreSnapshot(snapshot.content, queryTokens), snapshot }))
-    .filter((result) => result.score > 0)
-    .toSorted((left, right) => right.score - left.score)
-    .slice(0, limit)
-    .map((result) => result.snapshot);
+  const ftsQuery = query
+    .toLowerCase()
+    .replaceAll(/[^\w]/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(' OR ');
+
+  if (!ftsQuery) return [];
+
+  return db
+    .select({
+      content: memorySnapshots.content,
+      created_at: memorySnapshots.created_at,
+      fingerprint: memorySnapshots.fingerprint,
+      id: memorySnapshots.id,
+      last_seen_at: memorySnapshots.last_seen_at,
+      normalized_hash: memorySnapshots.normalized_hash,
+      scope: memorySnapshots.scope,
+      seen_count: memorySnapshots.seen_count,
+      superseded_by: memorySnapshots.superseded_by,
+    })
+    .from(memorySnapshots)
+    .innerJoin(
+      sql`memory_snapshots_fts fts`,
+      sql`memory_snapshots.rowid = fts.rowid`,
+    )
+    .where(sql`memory_snapshots_fts MATCH ${ftsQuery}`)
+    .orderBy(sql`bm25(memory_snapshots_fts)`)
+    .limit(limit)
+    .all() as MemorySnapshot[];
 }
 
 function findDuplicateSnapshot(db: LassoDb, content: string): MemorySnapshot | null {
@@ -295,11 +341,4 @@ function recordSnapshotSeen(db: LassoDb, id: string): MemorySnapshot {
   } as MemorySnapshot;
 }
 
-function scoreContent(content: string, queryTokens: Set<string>): number {
-  const tokens = content.toLowerCase().match(/[a-z0-9][a-z0-9_.:/-]{2,}/g) ?? [];
-  return tokens.filter((token) => queryTokens.has(token)).length;
-}
 
-function scoreSnapshot(content: string, queryTokens: Set<string>): number {
-  return scoreContent(content, queryTokens);
-}

@@ -50,6 +50,13 @@
       "when": 1777152073155,
       "tag": "0006_eager_rocket_raccoon",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1777153000000,
+      "tag": "0007_add_fts5_search_indexes",
+      "breakpoints": true
     }
   ]
 }

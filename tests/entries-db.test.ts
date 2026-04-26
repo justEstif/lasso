@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { ParsedEntry } from '../src/observers/memory/parser.ts';
 
-import { getMemoryDb } from '../src/db/index';
+import { ensureFtsIndexes, getMemoryDb } from '../src/db/index';
 import { runMigrations } from '../src/db/migrations';
 import {
   countEntries,
@@ -16,6 +16,7 @@ import {
 function entryDb() {
   const db = getMemoryDb();
   runMigrations(db);
+  ensureFtsIndexes(db);
   return db;
 }
 
