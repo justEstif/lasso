@@ -56,8 +56,8 @@ async function shouldReflect(): Promise<boolean> {
 
 async function observeConversation(conversation: string, tokens: number) {
   await Promise.all([
-    runLasso(['lint', 'scan'], { input: conversation }).catch(() => {}),
-    runLasso(['memory', 'observe', '--tokens', String(tokens)], { input: conversation }),
+    runLasso(['lint', 'scan', '--force'], { input: conversation }).catch(() => {}),
+    runLasso(['memory', 'observe', '--force', '--tokens', String(tokens)], { input: conversation }),
   ]);
   lastObservedTokens = tokens;
 }

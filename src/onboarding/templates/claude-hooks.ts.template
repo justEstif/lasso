@@ -78,8 +78,8 @@ async function handleStop() {
     if (!check.includes('"needed":true')) return;
 
     await Promise.all([
-      runLasso(['memory', 'observe', '--tokens', String(tokens)], { input: text }).catch(() => {}),
-      runLasso(['lint', 'scan'], { input: text }).catch(() => {}),
+      runLasso(['memory', 'observe', '--force', '--tokens', String(tokens)], { input: text }).catch(() => {}),
+      runLasso(['lint', 'scan', '--force'], { input: text }).catch(() => {}),
     ]);
 
     const reflectCheck = await runLasso(['memory', 'should-reflect']);

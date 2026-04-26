@@ -35,3 +35,5 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 /.lasso
 /.pi/om-debug.log
 /.pi/om-last-observer-response.json
+.lasso/db.sqlite*
+.lasso/debug/
