@@ -1,0 +1,143 @@
+const LASSO_COMMAND = ['lasso'];
+
+async function runLasso(args: string[], input?: string) {
+  const child = Bun.spawn([...LASSO_COMMAND, ...args], {
+    stderr: 'pipe',
+    stdin: input ? 'pipe' : 'ignore',
+    stdout: 'pipe',
+  });
+
+  if (input && child.stdin) {
+    child.stdin.write(input);
+    child.stdin.end();
+  }
+
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+
+  if (exitCode !== 0) {
+    const detail = stderr.trim() || stdout.trim() || `exit ${exitCode}`;
+    throw new Error(`lasso ${args.join(' ')} failed: ${detail}`);
+  }
+
+  return stdout.trim();
+}
+
+// --- Context injection (UserPromptSubmit) ---
+
+async function handleUserPromptSubmit() {
+  const input = JSON.parse(await Bun.stdin.text()) as {
+    prompt?: string;
+    transcript_path?: string;
+  };
+  const prompt = input.prompt?.trim();
+  const args = ['memory', 'context', '--limit', '10'];
+  if (prompt) args.push('--query', prompt);
+  const context = await runLasso(args);
+
+  const working = await runLasso(['memory', 'working']);
+
+  const sections: string[] = [];
+  if (context && !context.includes('No relevant memory found')) {
+    sections.push(`# Lasso Memory\n\n${context}`);
+  }
+  if (working && !working.includes('No working memory found')) {
+    sections.push(`# Lasso Working Memory\n\n${working}`);
+  }
+
+  const additionalContext = sections.length > 0 ? sections.join('\n\n') : '';
+
+  console.log(
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'UserPromptSubmit',
+        additionalContext,
+      },
+      suppressOutput: true,
+    }),
+  );
+}
+
+// --- Observe + lint on turn end (Stop) ---
+
+async function handleStop() {
+  const input = JSON.parse(await Bun.stdin.text()) as {
+    transcript_path?: string;
+    last_assistant_message?: string;
+  };
+
+  try {
+    const text = input.last_assistant_message ?? '';
+    const tokens = Math.ceil(text.length / 4);
+    if (tokens < 100) return;
+
+    const check = await runLasso(['memory', 'should-observe', '--tokens', String(tokens)]);
+    if (!check.includes('"needed":true')) return;
+
+    await Promise.all([
+      runLasso(['memory', 'observe', '--tokens', String(tokens)], { input: text }).catch(() => {}),
+      runLasso(['lint', 'scan'], { input: text }).catch(() => {}),
+    ]);
+
+    const reflectCheck = await runLasso(['memory', 'should-reflect']);
+    if (reflectCheck.includes('"needed":true')) {
+      const context = await runLasso(['memory', 'context', '--limit', '20']);
+      if (context) await runLasso(['memory', 'reflect'], { input: context });
+    }
+  } catch {
+    // Non-critical — don't block Claude from stopping
+  }
+}
+
+// --- Reflect + context injection before compaction (PreCompact) ---
+
+async function handlePreCompact() {
+  try {
+    const context = await runLasso(['memory', 'context', '--limit', '20']);
+    const working = await runLasso(['memory', 'working']);
+
+    const sections: string[] = [];
+    if (context && !context.includes('No relevant memory found')) {
+      sections.push(`Lasso memory context:\n${context}`);
+    }
+    if (working && !working.includes('No working memory found')) {
+      sections.push(`Lasso working memory:\n${working}`);
+    }
+
+    if (sections.length > 0) {
+      console.log(sections.join('\n\n'));
+    }
+
+    const reflectCheck = await runLasso(['memory', 'should-reflect']);
+    if (reflectCheck.includes('"needed":true')) {
+      await runLasso(['memory', 'reflect'], { input: sections.join('\n\n') || 'compaction' });
+    }
+  } catch {
+    // Non-critical — don't block compaction
+  }
+}
+
+// --- Dispatch by event name ---
+
+const handlers: Record<string, () => Promise<void>> = {
+  'pre-compact': handlePreCompact,
+  'stop': handleStop,
+  'user-prompt-submit': handleUserPromptSubmit,
+};
+
+const event = process.argv[2] ?? '';
+const handler = handlers[event];
+if (!handler) {
+  console.error(`Unknown lasso hook event: ${event}`);
+  process.exit(1);
+}
+
+handler().catch((error) => {
+  console.error(
+    `lasso ${event} hook failed: ${error instanceof Error ? error.message : String(error)}`,
+  );
+  process.exit(0);
+});

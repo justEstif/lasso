@@ -27,6 +27,14 @@ describe('setup CLI integration', () => {
   test('setup creates Claude Code hooks with full lifecycle', testClaudeSetupCli);
 });
 
+interface ClaudeSettings {
+  hooks: {
+    PreCompact: Array<{ hooks: Array<{ command: string }>; matcher: string }>;
+    Stop: Array<{ hooks: Array<{ command: string }>; matcher: string }>;
+    UserPromptSubmit: Array<{ hooks: Array<{ command: string }>; matcher: string }>;
+  };
+}
+
 function expectGeneratedPiExtension(extension: string) {
   expect(extension).toContain('lasso-status');
   expect(extension).toContain('serializeConversation(convertToLlm(messages))');
@@ -73,26 +81,24 @@ async function testClaudeSetupCli() {
   await mkdir(cwd, { recursive: true });
 
   const setup = await runLasso(cwd, ['setup', '--harness', 'claude']);
-  const submitHook = await Bun.file(
-    path.join(cwd, '.claude', 'hooks', 'lasso-user-prompt-submit.ts'),
-  ).text();
-  const stopHook = await Bun.file(path.join(cwd, '.claude', 'hooks', 'lasso-stop.ts')).text();
-  const compactHook = await Bun.file(
-    path.join(cwd, '.claude', 'hooks', 'lasso-pre-compact.ts'),
-  ).text();
-  const settings = await Bun.file(path.join(cwd, '.claude', 'settings.json')).json();
+  const hookFile = await Bun.file(path.join(cwd, '.claude', 'hooks', 'lasso-hooks.ts')).text();
+  const settings = (await Bun.file(
+    path.join(cwd, '.claude', 'settings.json'),
+  ).json()) as ClaudeSettings;
 
   expectSetupOutput(setup.stdout, 'claude');
-  expect(submitHook).toContain('additionalContext');
-  expect(stopHook).toContain('memory');
-  expect(stopHook).toContain('observe');
-  expect(stopHook).toContain('lint');
-  expect(stopHook).toContain('scan');
-  expect(compactHook).toContain('memory');
-  expect(compactHook).toContain('reflect');
-  expect(settings.hooks.UserPromptSubmit[0].matcher).toBe('*');
-  expect(settings.hooks.Stop[0].matcher).toBe('*');
-  expect(settings.hooks.PreCompact[0].matcher).toBe('*');
+  expect(hookFile).toContain('handleUserPromptSubmit');
+  expect(hookFile).toContain('handleStop');
+  expect(hookFile).toContain('handlePreCompact');
+  expect(hookFile).toContain('should-observe');
+  expect(hookFile).toContain('should-reflect');
+  expect(hookFile).toContain('additionalContext');
+  expect(settings.hooks.UserPromptSubmit[0]!.matcher).toBe('*');
+  expect(settings.hooks.Stop[0]!.matcher).toBe('*');
+  expect(settings.hooks.PreCompact[0]!.matcher).toBe('*');
+  expect(settings.hooks.UserPromptSubmit[0]!.hooks[0]!.command).toContain('lasso-hooks.ts');
+  expect(settings.hooks.Stop[0]!.hooks[0]!.command).toContain('lasso-hooks.ts');
+  expect(settings.hooks.PreCompact[0]!.hooks[0]!.command).toContain('lasso-hooks.ts');
 
   await rm(cwd, { force: true, recursive: true });
 }

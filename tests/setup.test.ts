@@ -18,21 +18,31 @@ interface ClaudeSettings {
   };
 }
 
-function assertClaudeFilesCreated(result: { created: string[] }, cwd: string) {
-  expect(result.created).toContain(
-    path.join(cwd, '.claude', 'hooks', 'lasso-user-prompt-submit.ts'),
-  );
-  expect(result.created).toContain(path.join(cwd, '.claude', 'hooks', 'lasso-stop.ts'));
-  expect(result.created).toContain(path.join(cwd, '.claude', 'hooks', 'lasso-pre-compact.ts'));
-  expect(result.created).toContain(path.join(cwd, '.claude', 'settings.json'));
+function assertClaudeHookLifecycle(hookFile: string) {
+  expect(hookFile).toContain('handleUserPromptSubmit');
+  expect(hookFile).toContain('handleStop');
+  expect(hookFile).toContain('handlePreCompact');
+  expect(hookFile).toContain('should-observe');
+  expect(hookFile).toContain('should-reflect');
+  expect(hookFile).toContain("['lint', 'scan']");
+  expect(hookFile).toContain("['memory', 'observe'");
+  expect(hookFile).toContain("['memory', 'context'");
+  expect(hookFile).toContain("['memory', 'reflect']");
 }
 
 function assertClaudeSettings(settings: ClaudeSettings) {
-  expect(settings.hooks.UserPromptSubmit[0]!.hooks[0]!.command).toContain(
-    'lasso-user-prompt-submit.ts',
-  );
-  expect(settings.hooks.Stop[0]!.hooks[0]!.command).toContain('lasso-stop.ts');
-  expect(settings.hooks.PreCompact[0]!.hooks[0]!.command).toContain('lasso-pre-compact.ts');
+  const commands = [
+    settings.hooks.UserPromptSubmit[0]!.hooks[0]!.command,
+    settings.hooks.Stop[0]!.hooks[0]!.command,
+    settings.hooks.PreCompact[0]!.hooks[0]!.command,
+  ];
+  // All three point to the same script, differentiated by arg
+  for (const cmd of commands) {
+    expect(cmd).toContain('lasso-hooks.ts');
+  }
+  expect(settings.hooks.UserPromptSubmit[0]!.hooks[0]!.command).toContain('user-prompt-submit');
+  expect(settings.hooks.Stop[0]!.hooks[0]!.command).toContain('stop');
+  expect(settings.hooks.PreCompact[0]!.hooks[0]!.command).toContain('pre-compact');
 }
 
 function assertOpencodePluginLifecycle(plugin: string) {
@@ -47,16 +57,6 @@ function assertOpencodePluginLifecycle(plugin: string) {
   expect(plugin).toContain("['memory', 'observe'");
 }
 
-async function readClaudeHooks(cwd: string) {
-  return {
-    compact: await Bun.file(path.join(cwd, '.claude', 'hooks', 'lasso-pre-compact.ts')).text(),
-    stop: await Bun.file(path.join(cwd, '.claude', 'hooks', 'lasso-stop.ts')).text(),
-    submit: await Bun.file(
-      path.join(cwd, '.claude', 'hooks', 'lasso-user-prompt-submit.ts'),
-    ).text(),
-  };
-}
-
 async function testClaudeSetup() {
   const cwd = path.join(process.cwd(), 'tests', '.tmp_init_claude');
   await rm(cwd, { force: true, recursive: true });
@@ -64,17 +64,15 @@ async function testClaudeSetup() {
 
   const result = await initProject(cwd, { harness: 'claude' });
   const config = await Bun.file(path.join(cwd, '.lasso', 'config.json')).json();
-  const hooks = await readClaudeHooks(cwd);
+  const hookFile = await Bun.file(path.join(cwd, '.claude', 'hooks', 'lasso-hooks.ts')).text();
   const settings = (await Bun.file(
     path.join(cwd, '.claude', 'settings.json'),
   ).json()) as ClaudeSettings;
 
-  assertClaudeFilesCreated(result, cwd);
+  expect(result.created).toContain(path.join(cwd, '.claude', 'hooks', 'lasso-hooks.ts'));
+  expect(result.created).toContain(path.join(cwd, '.claude', 'settings.json'));
   expect(config.harness.type).toBe('claude');
-  expect(hooks.submit).toContain("hookEventName: 'UserPromptSubmit'");
-  expect(hooks.stop).toContain('should-observe');
-  expect(hooks.stop).toContain('scan');
-  expect(hooks.compact).toContain('should-reflect');
+  assertClaudeHookLifecycle(hookFile);
   assertClaudeSettings(settings);
 
   await rm(cwd, { force: true, recursive: true });
