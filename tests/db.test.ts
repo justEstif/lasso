@@ -21,6 +21,7 @@ describe('Database Persistence', () => {
   });
 
   test('getDb uses ancestor project database from subdirectories', async () => {
+    closeDb(); // Ensure no cached singleton from prior tests
     await rm(tmpDir, { force: true, recursive: true });
     const projectRoot = path.join(tmpDir, 'project');
     const nested = path.join(projectRoot, 'src', 'nested');
