@@ -32,11 +32,18 @@ describe('Database Persistence', () => {
     mkdirSync(nested, { recursive: true });
     writeFileSync(path.join(projectRoot, '.lasso', 'config.json'), '{}');
 
+    const configPath = path.join(projectRoot, '.lasso', 'config.json');
+    expect(existsSync(configPath)).toBe(true);
+
+    // Walk up manually to verify each level
+    expect(existsSync(path.join(nested, '.lasso', 'config.json'))).toBe(false);
+    expect(existsSync(path.join(path.dirname(nested), '.lasso', 'config.json'))).toBe(false);
     expect(existsSync(path.join(projectRoot, '.lasso', 'config.json'))).toBe(true);
 
-    const { lassoDir, projectRoot: resolvedRoot } = resolveLassoPaths(nested);
-    expect(resolvedRoot).toBe(projectRoot);
-    expect(lassoDir).toBe(path.join(projectRoot, '.lasso'));
+    // Pass env without LASSO_PATH to ensure findProjectRoot is used
+    const result = resolveLassoPaths(nested, { LASSO_PATH: '' });
+    expect(result.projectRoot).toBe(projectRoot);
+    expect(result.lassoDir).toBe(path.join(projectRoot, '.lasso'));
 
     rmSync(tmpDir, { force: true, recursive: true });
   });
