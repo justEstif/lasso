@@ -54,6 +54,16 @@ export interface ShouldReflectResult {
   threshold: number;
 }
 
+export function buildFtsQuery(terms: string): string {
+  return terms
+    .toLowerCase()
+    .replaceAll(/[^\w]/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(' OR ');
+}
+
 export function checkShouldReflect(
   db: LassoDb,
   scope: MemoryScope,
@@ -233,19 +243,11 @@ export function searchEntries(
   query: string,
   options: EntryFilterOptions = {},
 ): ObservationEntry[] {
-  const limit = options.limit ?? 10;
-  const ftsQuery = query
-    .toLowerCase()
-    .replaceAll(/[^\w]/g, ' ')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .join(' OR ');
-
+  const ftsQuery = buildFtsQuery(query);
   if (!ftsQuery) return [];
 
-  return db
-    .select({
+  return ftsSearch(db, {
+    columns: {
       category: observationEntries.category,
       content: observationEntries.content,
       created_at: observationEntries.created_at,
@@ -255,31 +257,20 @@ export function searchEntries(
       referenced_date: observationEntries.referenced_date,
       relative_offset: observationEntries.relative_offset,
       snapshot_id: observationEntries.snapshot_id,
-    })
-    .from(observationEntries)
-    .innerJoin(
-      sql`observation_entries_fts fts`,
-      sql`observation_entries.rowid = fts.rowid`,
-    )
-    .where(sql`observation_entries_fts MATCH ${ftsQuery}`)
-    .orderBy(sql`bm25(observation_entries_fts)`)
-    .limit(limit)
-    .all();
+    },
+    ftsQuery,
+    ftsTable: 'observation_entries_fts',
+    limit: options.limit ?? 10,
+    table: observationEntries,
+  }) as ObservationEntry[];
 }
 
 export function searchSnapshots(db: LassoDb, query: string, limit = 5): MemorySnapshot[] {
-  const ftsQuery = query
-    .toLowerCase()
-    .replaceAll(/[^\w]/g, ' ')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .join(' OR ');
-
+  const ftsQuery = buildFtsQuery(query);
   if (!ftsQuery) return [];
 
-  return db
-    .select({
+  return ftsSearch(db, {
+    columns: {
       content: memorySnapshots.content,
       created_at: memorySnapshots.created_at,
       fingerprint: memorySnapshots.fingerprint,
@@ -289,16 +280,12 @@ export function searchSnapshots(db: LassoDb, query: string, limit = 5): MemorySn
       scope: memorySnapshots.scope,
       seen_count: memorySnapshots.seen_count,
       superseded_by: memorySnapshots.superseded_by,
-    })
-    .from(memorySnapshots)
-    .innerJoin(
-      sql`memory_snapshots_fts fts`,
-      sql`memory_snapshots.rowid = fts.rowid`,
-    )
-    .where(sql`memory_snapshots_fts MATCH ${ftsQuery}`)
-    .orderBy(sql`bm25(memory_snapshots_fts)`)
-    .limit(limit)
-    .all() as MemorySnapshot[];
+    },
+    ftsQuery,
+    ftsTable: 'memory_snapshots_fts',
+    limit,
+    table: memorySnapshots,
+  }) as MemorySnapshot[];
 }
 
 function findDuplicateSnapshot(db: LassoDb, content: string): MemorySnapshot | null {
@@ -319,6 +306,24 @@ function findDuplicateSnapshot(db: LassoDb, content: string): MemorySnapshot | n
         : false;
     }) ?? null
   );
+}
+
+function ftsSearch<
+  T extends typeof memorySnapshots | typeof observationEntries,
+  C extends Record<string, unknown>,
+>(db: LassoDb, options: { columns: C; ftsQuery: string; ftsTable: string; limit: number; table: T }) {
+  const baseTable = options.ftsTable.replace('_fts', '');
+  return db
+    .select(options.columns as Parameters<typeof db.select>[0])
+    .from(options.table)
+    .innerJoin(
+      sql`${sql.raw(options.ftsTable)} fts`,
+      sql`${sql.raw(baseTable)}.rowid = fts.rowid`,
+    )
+    .where(sql`${sql.raw(options.ftsTable)} MATCH ${options.ftsQuery}`)
+    .orderBy(sql`bm25(${sql.raw(options.ftsTable)})`)
+    .limit(options.limit)
+    .all();
 }
 
 function recordSnapshotSeen(db: LassoDb, id: string): MemorySnapshot {

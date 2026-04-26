@@ -1,15 +1,11 @@
 import { Box, render, renderToString, Text, useApp, useInput } from 'ink';
 import React, { useMemo, useState } from 'react';
 
-import type { LassoDb } from '../db/index.ts';
 import type { LassoConfig } from '../config/load.ts';
+import type { LassoDb } from '../db/index.ts';
 
 import { buildLintStatusModel } from '../observers/lint/status.ts';
 import { buildMemoryStatusModel } from '../observers/memory/status.ts';
-
-interface TuiOptions {
-  once?: boolean;
-}
 
 interface DashboardModel {
   lint: {
@@ -32,6 +28,10 @@ interface DashboardModel {
     snapshots: number;
   };
   updatedAt: string;
+}
+
+interface TuiOptions {
+  once?: boolean;
 }
 
 export async function handleTui(db: LassoDb, config: LassoConfig, options: TuiOptions) {

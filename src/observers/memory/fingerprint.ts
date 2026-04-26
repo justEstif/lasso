@@ -58,9 +58,9 @@ export function tokenSimilarity(left: string, right: string): number {
 function normalizeMemory(content: string): string {
   return content
     .toLowerCase()
-    .replace(/[^a-z0-9_.:/-]+/g, ' ')
+    .replaceAll(/[^a-z0-9_.:/-]+/g, ' ')
     .trim()
-    .replace(/\s+/g, ' ');
+    .replaceAll(/\s+/g, ' ');
 }
 
 const memoryStopWords = new Set([

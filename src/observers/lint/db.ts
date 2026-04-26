@@ -16,16 +16,16 @@ export interface AddRecurrenceInput {
   relativeOffset?: null | number;
 }
 
+export type LintEntry = typeof lintEntries.$inferSelect & { status: LintStatus };
+
 export interface LintObservationState {
   lastObservedTokens: number;
   lastObservedTurns: number;
 }
 
-export type LintStatus = 'proposed' | 'accepted' | 'rejected' | 'deferred' | 'implemented';
-
-export type LintEntry = typeof lintEntries.$inferSelect & { status: LintStatus };
 export type LintRecurrence = typeof lintRecurrences.$inferSelect;
 export type LintScanRun = typeof lintScanRuns.$inferSelect;
+export type LintStatus = 'accepted' | 'deferred' | 'implemented' | 'proposed' | 'rejected';
 
 export function addRecurrence(db: LassoDb, entryId: string, input: AddRecurrenceInput): void {
   const now = new Date().toISOString();
@@ -40,6 +40,40 @@ export function addRecurrence(db: LassoDb, entryId: string, input: AddRecurrence
     })
     .run();
   db.update(lintEntries).set({ updated_at: now }).where(eq(lintEntries.id, entryId)).run();
+}
+
+export function countByStatus(db: LassoDb): Record<LintStatus, number> {
+  const defaults: Record<LintStatus, number> = {
+    accepted: 0,
+    deferred: 0,
+    implemented: 0,
+    proposed: 0,
+    rejected: 0,
+  };
+
+  const rows = db
+    .select({
+      count: sql<number>`cast(count(*) as integer)`,
+      status: lintEntries.status,
+    })
+    .from(lintEntries)
+    .groupBy(lintEntries.status)
+    .all() as Array<{ count: number; status: string }>;
+
+  for (const row of rows) {
+    if (row.status in defaults) defaults[row.status as LintStatus] = row.count;
+  }
+  return defaults;
+}
+
+export function countStaleProposed(db: LassoDb, staleAfterDays: number): number {
+  const staleBefore = new Date(Date.now() - staleAfterDays * 24 * 60 * 60 * 1000).toISOString();
+  const row = db
+    .select({ count: sql<number>`cast(count(*) as integer)` })
+    .from(lintEntries)
+    .where(sql`${lintEntries.status} = 'proposed' AND ${lintEntries.created_at} < ${staleBefore}`)
+    .get();
+  return Number(row?.count ?? 0);
 }
 
 export function createEntry(
@@ -62,22 +96,6 @@ export function getEntry(db: LassoDb, id: string): LintEntry | null {
     .prepare();
 
   return (prepared.get({ id }) as LintEntry | undefined) ?? null;
-}
-
-export function resolveEntryId(db: LassoDb, idOrPrefix: string): string {
-  const exact = getEntry(db, idOrPrefix);
-  if (exact) return exact.id;
-
-  const matches = db
-    .select({ id: lintEntries.id })
-    .from(lintEntries)
-    .where(sql`${lintEntries.id} LIKE ${`${idOrPrefix}%`}`)
-    .limit(2)
-    .all();
-
-  if (matches.length === 1 && matches[0]?.id) return matches[0].id;
-  if (matches.length > 1) throw new Error(`Lint entry id prefix ${idOrPrefix} is ambiguous.`);
-  throw new Error(`Lint entry ${idOrPrefix} not found.`);
 }
 
 export function getLastScanRun(db: LassoDb): LintScanRun | null {
@@ -170,6 +188,22 @@ export function recordScanRun(
       skipped_count: summary.skipped,
     })
     .run();
+}
+
+export function resolveEntryId(db: LassoDb, idOrPrefix: string): string {
+  const exact = getEntry(db, idOrPrefix);
+  if (exact) return exact.id;
+
+  const matches = db
+    .select({ id: lintEntries.id })
+    .from(lintEntries)
+    .where(sql`${lintEntries.id} LIKE ${idOrPrefix + '%'}`)
+    .limit(2)
+    .all();
+
+  if (matches.length === 1 && matches[0]?.id) return matches[0].id;
+  if (matches.length > 1) throw new Error(`Lint entry id prefix ${idOrPrefix} is ambiguous.`);
+  throw new Error(`Lint entry ${idOrPrefix} not found.`);
 }
 
 export function updateEntryStatus(db: LassoDb, id: string, status: LintStatus): void {

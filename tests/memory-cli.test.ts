@@ -24,7 +24,7 @@ function expectMemoryLifecycleOutput(results: {
 }
 
 async function observeMemory(cwd: string, content: string, tokens?: string) {
-  const args = ['memory', 'observe', '--content', content];
+  const args = ['memory', 'observe', '--content', content, '--force'];
   if (tokens) args.push('--tokens', tokens);
   return runLasso(cwd, args);
 }

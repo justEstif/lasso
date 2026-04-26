@@ -1,10 +1,9 @@
-import type { LassoDb } from '../../db/index.ts';
-
 import type { LassoConfig } from '../../config/load.ts';
+import type { LassoDb } from '../../db/index.ts';
 import type { LintEntry, LintScanRun, LintStatus } from './db.ts';
 
 import { checkSaturation } from '../service.ts';
-import { getLastScanRun, listEntries } from './db.ts';
+import { countByStatus, countStaleProposed, getLastScanRun, listEntries } from './db.ts';
 
 export interface LintStatusModel {
   counts: Record<LintStatus, number>;
@@ -23,7 +22,7 @@ export interface LintStatusModel {
  */
 export function buildLintStatusModel(db: LassoDb, config: LassoConfig): LintStatusModel {
   const entries = listEntries(db);
-  const counts = countLintStatuses(entries);
+  const counts = countByStatus(db);
   const lintConfig = config.observers.lint;
 
   return {
@@ -31,24 +30,14 @@ export function buildLintStatusModel(db: LassoDb, config: LassoConfig): LintStat
     entries,
     lastScan: getLastScanRun(db),
     saturation: checkSaturation({ activeCount: counts.proposed, limit: lintConfig.throttleLimit }),
-    staleProposed: countStaleProposed(entries, lintConfig.staleAfterDays),
+    staleProposed: countStaleProposed(db, lintConfig.staleAfterDays),
     total: entries.length,
   };
 }
 
+// countLintStatuses kept for backward compat with any callers doing JS-side counting
 export function countLintStatuses(entries: LintEntry[]): Record<LintStatus, number> {
-  const counts = { accepted: 0, deferred: 0, implemented: 0, proposed: 0, rejected: 0 };
-
-  for (const entry of entries) {
-    counts[entry.status]++;
-  }
-
+  const counts: Record<LintStatus, number> = { accepted: 0, deferred: 0, implemented: 0, proposed: 0, rejected: 0 };
+  for (const entry of entries) counts[entry.status]++;
   return counts;
-}
-
-function countStaleProposed(entries: LintEntry[], staleAfterDays: number) {
-  const staleBefore = Date.now() - staleAfterDays * 24 * 60 * 60 * 1000;
-  return entries.filter((entry) => {
-    return entry.status === 'proposed' && new Date(entry.created_at).getTime() < staleBefore;
-  }).length;
 }

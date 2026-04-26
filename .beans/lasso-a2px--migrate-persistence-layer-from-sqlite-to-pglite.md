@@ -1,11 +1,11 @@
 ---
 # lasso-a2px
 title: Migrate persistence layer from SQLite to PGlite
-status: draft
+status: scrapped
 type: epic
 priority: low
 created_at: 2026-04-25T15:17:48Z
-updated_at: 2026-04-25T15:18:00Z
+updated_at: 2026-04-26T12:53:55Z
 ---
 
 Migrate lasso's database layer from bun:sqlite to PGlite (embedded Postgres via WASM). Unlocks pgvector for semantic recall, full Drizzle support, and a future path to real Postgres if needed.
@@ -40,3 +40,5 @@ Scope:
 - [ ] Update all tests
 - [ ] Remove bun:sqlite and drizzle-orm/bun-sqlite dependencies
 - [ ] Verify data migration path for existing users
+
+## Reasons for Scrapping\n\nDecided to stay on SQLite. PGlite migration was motivated by pgvector for semantic recall, but lasso's structured memory format (categories, priorities, dates + content) plays to FTS5's strengths, not vectors. FTS5 is built into bun:sqlite, zero deps, zero architecture changes.

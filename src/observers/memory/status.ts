@@ -1,5 +1,4 @@
 import type { LassoDb } from '../../db/index.ts';
-
 import type { MemoryReflection, MemorySnapshot } from './db.ts';
 
 import {

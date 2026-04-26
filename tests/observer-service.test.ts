@@ -112,7 +112,14 @@ describe('shared observer saturation gate', () => {
   });
 
   test('exposes lint scan gating through the shared primitives', () => {
-    const result = checkShouldScanLint(15, 5000, 0, 10, 0, defaultConfig);
+    const result = checkShouldScanLint({
+      activeCount: 15,
+      config: defaultConfig,
+      currentTokens: 5000,
+      currentTurns: 10,
+      lastObservedTokens: 0,
+      lastObservedTurns: 0,
+    });
 
     expect(result.saturation.saturated).toBe(true);
     expect(result.tokenBudget.needed).toBe(true);

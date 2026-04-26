@@ -33,52 +33,33 @@ export interface ScanSummary {
 }
 
 export function applyDetectorResult(db: LassoDb, result: DetectorResult): ScanSummary {
+  if (!result.found_opportunity) return { created: 0, recurrences: 0, skipped: 0 };
+
   const summary = { created: 0, recurrences: 0, skipped: 0 };
-
-  if (!result.found_opportunity) return summary;
-
   for (const entry of result.entries) {
-    if (entry.matches_existing_id) {
-      addMatchedRecurrence(db, entry);
-      summary.recurrences++;
-      continue;
-    }
-
-    createEntry(db, {
-      affected_paths: JSON.stringify(entry.affected_paths ?? []),
-      category: entry.category ?? null,
-      description: entry.description,
-      detector_version: LINT_DETECTOR_VERSION,
-      proposed_form: entry.proposed_form ?? null,
-      referenced_date: entry.referenced_date ?? null,
-      relative_offset: entry.relative_offset ?? null,
-      severity: entry.severity ?? 'medium',
-      source_excerpt: entry.source_excerpt ?? null,
-      status: 'proposed',
-    });
-    summary.created++;
+    applySingleDetectorEntry(db, entry, summary);
   }
-
   return summary;
-}
-
-export function parseDetectorResult(input: string): DetectorResult {
-  const parsed = JSON.parse(extractJsonObject(input)) as unknown;
-  return v.parse(DetectorResultSchema, parsed);
 }
 
 export function extractJsonObject(input: string): string {
   const trimmed = input.trim();
   if (trimmed.startsWith('{') && trimmed.endsWith('}')) return trimmed;
 
+  // eslint-disable-next-line sonarjs/slow-regex -- intentional: regex must cross newlines for fenced code blocks
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (fenced?.[1]) return fenced[1].trim();
 
   const start = trimmed.indexOf('{');
   const end = trimmed.lastIndexOf('}');
-  if (start >= 0 && end > start) return trimmed.slice(start, end + 1);
+  if (start !== -1 && end > start) return trimmed.slice(start, end + 1);
 
   throw new SyntaxError('Detector output did not contain a JSON object');
+}
+
+export function parseDetectorResult(input: string): DetectorResult {
+  const parsed = JSON.parse(extractJsonObject(input)) as unknown;
+  return v.parse(DetectorResultSchema, parsed);
 }
 
 function addMatchedRecurrence(db: LassoDb, entry: DetectorEntry) {
@@ -92,4 +73,26 @@ function addMatchedRecurrence(db: LassoDb, entry: DetectorEntry) {
     referencedDate: entry.referenced_date ?? null,
     relativeOffset: entry.relative_offset ?? null,
   });
+}
+
+function applySingleDetectorEntry(db: LassoDb, entry: DetectorEntry, summary: ScanSummary) {
+  if (entry.matches_existing_id) {
+    addMatchedRecurrence(db, entry);
+    summary.recurrences++;
+    return;
+  }
+
+  createEntry(db, {
+    affected_paths: JSON.stringify(entry.affected_paths ?? []),
+    category: entry.category ?? null,
+    description: entry.description,
+    detector_version: LINT_DETECTOR_VERSION,
+    proposed_form: entry.proposed_form ?? null,
+    referenced_date: entry.referenced_date ?? null,
+    relative_offset: entry.relative_offset ?? null,
+    severity: entry.severity ?? 'medium',
+    source_excerpt: entry.source_excerpt ?? null,
+    status: 'proposed',
+  });
+  summary.created++;
 }
