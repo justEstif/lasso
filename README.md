@@ -18,11 +18,18 @@ brew tap justEstif/tap && brew install lasso
 
 ```bash
 cd your-project
-lasso setup
-/reload   # if using Pi
+lasso setup                    # Pi (default)
+lasso setup --harness opencode  # opencode
+lasso setup --harness claude    # Claude Code
 ```
 
-Creates `.lasso/config.json`, `.pi/extensions/lasso.ts`, `.gitignore` entries.
+Creates `.lasso/config.json`, the harness adapter files, and `.gitignore` entries.
+
+| Harness    | Generated files                                                      |
+| ---------- | -------------------------------------------------------------------- |
+| `pi`       | `.pi/extensions/lasso.ts`                                            |
+| `opencode` | `.opencode/plugins/lasso.ts`                                         |
+| `claude`   | `.claude/hooks/lasso-user-prompt-submit.ts`, `.claude/settings.json` |
 
 ## Observers
 
@@ -87,7 +94,10 @@ lasso disable <observer>  # disable lint or memory
 - **Search**: FTS5 full-text search with BM25 ranking.
 - **Observers**: shared lifecycle — token budget gates → observe → persist progress.
 - **CLI**: thin Commander router → observer modules own registration + handlers.
-- **Harness**: Pi adapter via `.pi/extensions/lasso.ts`. Hooks: `session_start`, `turn_end`, `before_agent_start`, `session_before_compact`.
+- **Harness adapters**: context injection per agent —
+  - **Pi**: `.pi/extensions/lasso.ts`. Hooks: `session_start`, `turn_end`, `before_agent_start`, `session_before_compact`.
+  - **opencode**: `.opencode/plugins/lasso.ts`. Hooks: `chat.message`, `experimental.chat.system.transform`.
+  - **Claude Code**: `.claude/hooks/lasso-user-prompt-submit.ts` + `.claude/settings.json`. Hook: `UserPromptSubmit` → `additionalContext`.
 
 ## Project resolution
 
@@ -101,7 +111,7 @@ LASSO_PATH=/path/to/project lasso status
 
 ```bash
 bun install
-bun test                  # 96 tests
+bun test                  # 100 tests
 bunx tsc --noEmit         # type check
 bunx eslint src/ tests/   # lint
 ```
