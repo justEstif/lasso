@@ -4,6 +4,8 @@ import path from 'node:path';
 
 import { defaultObserverModel, loadConfig, setObserverEnabled } from '../src/config/load';
 
+const originalEnv = process.env;
+
 const tmpDir = path.join(process.cwd(), 'tests', '.tmp_test_config');
 
 describe('Config loading', () => {
@@ -48,15 +50,22 @@ describe('Config mutation', () => {
   test('can update project observer enabled flag', async () => {
     await rm(tmpDir, { force: true, recursive: true });
 
-    await setObserverEnabled('lint', false, tmpDir);
-    await setObserverEnabled('memory', true, tmpDir);
+    // Point resolveLassoPaths at the temp dir's .lasso
+    process.env.LASSO_PATH = '.lasso';
 
-    const config = await loadConfig(tmpDir);
-    const configFile = await Bun.file(path.join(tmpDir, '.lasso', 'config.json')).json();
+    try {
+      await setObserverEnabled('lint', false, tmpDir);
+      await setObserverEnabled('memory', true, tmpDir);
 
-    expect(config.observers.lint.enabled).toBe(false);
-    expect(config.observers.memory.enabled).toBe(true);
-    expect(configFile.observers.lint.enabled).toBe(false);
+      const config = await loadConfig(tmpDir);
+      const configFile = await Bun.file(path.join(tmpDir, '.lasso', 'config.json')).json();
+
+      expect(config.observers.lint.enabled).toBe(false);
+      expect(config.observers.memory.enabled).toBe(true);
+      expect(configFile.observers.lint.enabled).toBe(false);
+    } finally {
+      process.env = originalEnv;
+    }
 
     await rm(tmpDir, { force: true, recursive: true });
   });

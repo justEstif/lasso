@@ -6,22 +6,23 @@ const projectRoot = process.cwd();
 const entrypoint = path.join(projectRoot, 'index.ts');
 
 async function runLasso(cwd: string, args: string[], input?: string) {
-  const process = Bun.spawn(['bun', 'run', entrypoint, ...args], {
+  const proc = Bun.spawn(['bun', 'run', entrypoint, ...args], {
     cwd,
+    env: { ...process.env, LASSO_PATH: '.lasso' },
     stderr: 'pipe',
     stdin: input ? 'pipe' : 'ignore',
     stdout: 'pipe',
   });
 
-  if (input && process.stdin) {
-    process.stdin.write(input);
-    process.stdin.end();
+  if (input && proc.stdin) {
+    proc.stdin.write(input);
+    proc.stdin.end();
   }
 
   const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
-    process.exited,
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
   ]);
 
   return { exitCode, stderr, stdout };

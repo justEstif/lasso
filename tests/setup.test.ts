@@ -24,8 +24,8 @@ function assertClaudeHookLifecycle(hookFile: string) {
   expect(hookFile).toContain('handlePreCompact');
   expect(hookFile).toContain('should-observe');
   expect(hookFile).toContain('should-reflect');
-  expect(hookFile).toContain("['lint', 'scan']");
-  expect(hookFile).toContain("['memory', 'observe'");
+  expect(hookFile).toContain("['lint', 'scan', '--force']");
+  expect(hookFile).toContain("['memory', 'observe', '--force'");
   expect(hookFile).toContain("['memory', 'context'");
   expect(hookFile).toContain("['memory', 'reflect']");
 }
@@ -53,8 +53,8 @@ function assertOpencodePluginLifecycle(plugin: string) {
   expect(plugin).toContain("['memory', 'context', '--limit', '10']");
   expect(plugin).toContain("['memory', 'should-observe'");
   expect(plugin).toContain("['memory', 'should-reflect']");
-  expect(plugin).toContain("['lint', 'scan']");
-  expect(plugin).toContain("['memory', 'observe'");
+  expect(plugin).toContain("['lint', 'scan', '--force']");
+  expect(plugin).toContain("['memory', 'observe', '--force'");
 }
 
 async function testClaudeSetup() {
