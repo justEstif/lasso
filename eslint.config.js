@@ -24,8 +24,8 @@ export default tseslint.config(
       'max-params': ['error', 4],
       'max-statements': ['error', 20],
       'no-console': 'off',
-      'unicorn/prevent-abbreviations': 'off',
       'unicorn/no-null': 'off',
+      'unicorn/prevent-abbreviations': 'off',
     },
   },
   {

@@ -72,19 +72,39 @@ function serializePiConversation(ctx: LassoStatusContext) {
   return serializeConversation(convertToLlm(messages));
 }
 
+function isStaleContextError(error: unknown) {
+  return error instanceof Error && error.message.includes('extension ctx is stale');
+}
+
+function safeSetLassoStatus(ctx: LassoStatusContext, text: string | undefined) {
+  try {
+    ctx.ui.setStatus('lasso', text);
+  } catch (error) {
+    if (!isStaleContextError(error)) throw error;
+  }
+}
+
+function safeNotify(ctx: LassoStatusContext, message: string, level?: string) {
+  try {
+    ctx.ui.notify(message, level);
+  } catch (error) {
+    if (!isStaleContextError(error)) throw error;
+  }
+}
+
 function updateLassoStatus(ctx: LassoStatusContext) {
   void Promise.all([runLasso(['lint', 'status']), runLasso(['memory', 'status'])])
     .then(([lint, memory]) => {
       const lintSummary = summarizeLintStatus(lint.stdout);
       const memorySummary = summarizeMemoryStatus(memory.stdout);
       const failed = lint.exitCode !== 0 || memory.exitCode !== 0;
-      ctx.ui.setStatus(
-        'lasso',
+      safeSetLassoStatus(
+        ctx,
         failed ? '[lasso: observer status unavailable]' : `[lasso: ${lintSummary}, ${memorySummary}]`,
       );
     })
     .catch(() => {
-      ctx.ui.setStatus('lasso', '[lasso: unavailable]');
+      safeSetLassoStatus(ctx, '[lasso: unavailable]');
     });
 }
 
@@ -214,14 +234,14 @@ async function observeWithLasso(ctx: LassoStatusContext) {
     return;
   }
 
-  ctx.ui.setStatus('lasso', '[lasso: observing...]');
+  safeSetLassoStatus(ctx, '[lasso: observing...]');
   void Promise.all([
     runLasso(['lint', 'scan'], { input: conversation }),
     persistMemoryObservation(ctx, conversation, estimatedTokens),
   ])
     .then(() => triggerReflectionIfNeeded(ctx))
     .catch((error) => {
-      ctx.ui.notify(`lasso observation failed: ${error instanceof Error ? error.message : String(error)}`, 'warning');
+      safeNotify(ctx, `lasso observation failed: ${error instanceof Error ? error.message : String(error)}`, 'warning');
       updateLassoStatus(ctx);
     });
 }
@@ -241,7 +261,7 @@ async function triggerReflectionIfNeeded(ctx: LassoStatusContext) {
     return;
   }
 
-  ctx.ui.setStatus('lasso', '[lasso: reflecting...]');
+  safeSetLassoStatus(ctx, '[lasso: reflecting...]');
   try {
     const conversation = serializePiConversation(ctx);
     const result = await runPiMemoryModel(ctx, buildAutoReflectionPrompt(conversation));
@@ -259,12 +279,12 @@ async function runMirroredCommand(args: string, ctx: LassoStatusContext) {
   if (commandArgs.length === 0) {
     const lint = await runLasso(['lint', 'status']);
     const memory = await runLasso(['memory', 'status']);
-    ctx.ui.notify(`${lint.stdout}\n${memory.stdout}`.trim(), lint.exitCode || memory.exitCode ? 'error' : 'info');
+    safeNotify(ctx, `${lint.stdout}\n${memory.stdout}`.trim(), lint.exitCode || memory.exitCode ? 'error' : 'info');
     return;
   }
 
   const result = await runLasso(commandArgs);
-  ctx.ui.notify((result.stdout || result.stderr).trim(), result.exitCode === 0 ? 'info' : 'error');
+  safeNotify(ctx, (result.stdout || result.stderr).trim(), result.exitCode === 0 ? 'info' : 'error');
   updateLassoStatus(ctx);
 }
 
@@ -301,7 +321,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on('session_before_compact', async (event, ctx) => {
-    ctx.ui.setStatus('lasso', '[lasso: reflecting...]');
+    safeSetLassoStatus(ctx, '[lasso: reflecting...]');
     try {
       const result = await runPiMemoryModel(ctx, buildMemoryReflectorPrompt(event), event.signal);
       const summary = typeof result.parsed?.threadSummary === 'string' ? result.parsed.threadSummary : result.rawText;
@@ -317,7 +337,7 @@ export default function (pi: ExtensionAPI) {
         },
       };
     } finally {
-      ctx.ui.setStatus('lasso', undefined);
+      safeSetLassoStatus(ctx, undefined);
     }
   });
 
@@ -333,7 +353,7 @@ export default function (pi: ExtensionAPI) {
     handler: async (_args, ctx) => {
       const conversation = serializePiConversation(ctx);
       const result = await runLasso(['lint', 'scan'], { input: conversation });
-      ctx.ui.notify((result.stdout || result.stderr).trim(), result.exitCode === 0 ? 'info' : 'error');
+      safeNotify(ctx, (result.stdout || result.stderr).trim(), result.exitCode === 0 ? 'info' : 'error');
       updateLassoStatus(ctx);
     },
   });
@@ -358,7 +378,7 @@ export default function (pi: ExtensionAPI) {
       const conversation = serializePiConversation(ctx);
       const tokens = Math.ceil(conversation.length / 4);
       const result = await runLasso(['memory', 'observe', '--tokens', String(tokens)], { input: conversation });
-      ctx.ui.notify((result.stdout || result.stderr).trim(), result.exitCode === 0 ? 'info' : 'error');
+      safeNotify(ctx, (result.stdout || result.stderr).trim(), result.exitCode === 0 ? 'info' : 'error');
       updateLassoStatus(ctx);
     },
   });
@@ -375,7 +395,7 @@ export default function (pi: ExtensionAPI) {
     handler: async (_args, ctx) => {
       const conversation = serializePiConversation(ctx);
       const result = await runLasso(['memory', 'reflect'], { input: conversation });
-      ctx.ui.notify((result.stdout || result.stderr).trim(), result.exitCode === 0 ? 'info' : 'error');
+      safeNotify(ctx, (result.stdout || result.stderr).trim(), result.exitCode === 0 ? 'info' : 'error');
       updateLassoStatus(ctx);
     },
   });

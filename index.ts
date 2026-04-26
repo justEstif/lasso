@@ -2,7 +2,9 @@
 
 import { bootstrap } from './src/cli';
 
-bootstrap().catch((err) => {
-  console.error(err);
+try {
+  await bootstrap();
+} catch (error) {
+  console.error(error);
   process.exit(1);
-});
+}
